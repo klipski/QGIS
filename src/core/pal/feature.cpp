@@ -1581,15 +1581,7 @@ int FeaturePart::createCandidates( QList< LabelPosition*>& lPos,
   while ( i.hasNext() )
   {
     LabelPosition* pos = i.next();
-    bool outside = false;
-    if ( mLF->layer()->pal->getShowPartial() )
-    {
-      outside = !pos->isIntersect( bbox );
-    }
-    else
-    {
-      outside = !pos->isInside( bbox );
-    }
+    bool outside = !pos->isInside( bbox );
     if ( outside )
     {
       i.remove();
