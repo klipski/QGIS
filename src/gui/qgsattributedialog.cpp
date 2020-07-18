@@ -122,7 +122,7 @@ void QgsAttributeDialog::init( QgsVectorLayer *layer, QgsFeature *feature, const
   connect( layer, &QObject::destroyed, this, &QWidget::close );
 
   mMenu = new QgsActionMenu( layer, mAttributeForm->feature(), QStringLiteral( "Feature" ), this );
-  if ( !mMenu->actions().isEmpty() )
+  if ( !mMenu->menuActions().isEmpty() )
   {
     QMenuBar *menuBar = new QMenuBar( this );
     menuBar->addMenu( mMenu );
@@ -147,4 +147,9 @@ bool QgsAttributeDialog::event( QEvent *e )
     mHighlight->hide();
 
   return QDialog::event( e );
+}
+
+void QgsAttributeDialog::setExtraContextScope( QgsExpressionContextScope *extraScope )
+{
+  mAttributeForm->setExtraContextScope( extraScope );
 }

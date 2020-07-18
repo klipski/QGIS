@@ -75,9 +75,7 @@ QColor QgsSymbolLayerUtils::decodeColor( const QString &str )
 
 QString QgsSymbolLayerUtils::encodeSldAlpha( int alpha )
 {
-  QString result;
-  result.sprintf( "%.2g", alpha / 255.0 );
-  return result;
+  return QString::number( alpha / 255.0, 'g', 2 );
 }
 
 int QgsSymbolLayerUtils::decodeSldAlpha( const QString &str )
@@ -761,19 +759,22 @@ QPainter::CompositionMode QgsSymbolLayerUtils::decodeBlendMode( const QString &s
   return QPainter::CompositionMode_SourceOver; // "Normal"
 }
 
-QIcon QgsSymbolLayerUtils::symbolPreviewIcon( const QgsSymbol *symbol, QSize size, int padding )
+QIcon QgsSymbolLayerUtils::symbolPreviewIcon( const QgsSymbol *symbol, QSize size, int padding, QgsLegendPatchShape *shape )
 {
-  return QIcon( symbolPreviewPixmap( symbol, size, padding ) );
+  return QIcon( symbolPreviewPixmap( symbol, size, padding, nullptr, false, nullptr, shape ) );
 }
 
-QPixmap QgsSymbolLayerUtils::symbolPreviewPixmap( const QgsSymbol *symbol, QSize size, int padding, QgsRenderContext *customContext, bool selected, const QgsExpressionContext *expressionContext )
+QPixmap QgsSymbolLayerUtils::symbolPreviewPixmap( const QgsSymbol *symbol, QSize size, int padding, QgsRenderContext *customContext, bool selected, const QgsExpressionContext *expressionContext, const QgsLegendPatchShape *shape )
 {
   Q_ASSERT( symbol );
   QPixmap pixmap( size );
   pixmap.fill( Qt::transparent );
   QPainter painter;
   painter.begin( &pixmap );
-  painter.setRenderHint( QPainter::Antialiasing );
+  if ( customContext )
+    customContext->setPainterFlagsUsingContext( &painter );
+  else
+    painter.setRenderHint( QPainter::Antialiasing );
 
   if ( customContext )
   {
@@ -806,12 +807,12 @@ QPixmap QgsSymbolLayerUtils::symbolPreviewPixmap( const QgsSymbol *symbol, QSize
           prop.setActive( false );
       }
     }
-    symbol_noDD->drawPreviewIcon( &painter, size, customContext, selected, expressionContext );
+    symbol_noDD->drawPreviewIcon( &painter, size, customContext, selected, expressionContext, shape );
   }
   else
   {
     std::unique_ptr<QgsSymbol> symbolClone( symbol->clone( ) );
-    symbolClone->drawPreviewIcon( &painter, size, customContext, selected, expressionContext );
+    symbolClone->drawPreviewIcon( &painter, size, customContext, selected, expressionContext, shape );
   }
 
   painter.end();
@@ -839,6 +840,7 @@ QPicture QgsSymbolLayerUtils::symbolLayerPreviewPicture( const QgsSymbolLayer *l
   painter.setRenderHint( QPainter::Antialiasing );
   QgsRenderContext renderContext = QgsRenderContext::fromQPainter( &painter );
   renderContext.setForceVectorOutput( true );
+  renderContext.setFlag( QgsRenderContext::RenderSymbolPreview, true );
   QgsSymbolRenderContext symbolContext( renderContext, units, 1.0, false, nullptr, nullptr );
   std::unique_ptr< QgsSymbolLayer > layerClone( layer->clone() );
   layerClone->drawPreviewIcon( symbolContext, size );
@@ -854,6 +856,7 @@ QIcon QgsSymbolLayerUtils::symbolLayerPreviewIcon( const QgsSymbolLayer *layer, 
   painter.begin( &pixmap );
   painter.setRenderHint( QPainter::Antialiasing );
   QgsRenderContext renderContext = QgsRenderContext::fromQPainter( &painter );
+  renderContext.setFlag( QgsRenderContext::RenderSymbolPreview );
   // build a minimal expression context
   QgsExpressionContext expContext;
   expContext.appendScopes( QgsExpressionContextUtils::globalProjectLayerScopes( nullptr ) );
@@ -2767,7 +2770,7 @@ bool QgsSymbolLayerUtils::createFunctionElement( QDomDocument &doc, QDomElement 
 
 bool QgsSymbolLayerUtils::functionFromSldElement( QDomElement &element, QString &function )
 {
-  // check if ogc:Filter or containe ogc:Filters
+  // check if ogc:Filter or contains ogc:Filters
   QDomElement elem = element;
   if ( element.tagName() != QLatin1String( "Filter" ) )
   {
@@ -4008,7 +4011,7 @@ QPointF QgsSymbolLayerUtils::polygonCentroid( const QPolygonF &points )
   return QPointF( cx, cy );
 }
 
-QPointF QgsSymbolLayerUtils::polygonPointOnSurface( const QPolygonF &points, QList<QPolygonF> *rings )
+QPointF QgsSymbolLayerUtils::polygonPointOnSurface( const QPolygonF &points, const QVector<QPolygonF> *rings )
 {
   QPointF centroid = QgsSymbolLayerUtils::polygonCentroid( points );
 
@@ -4022,8 +4025,7 @@ QPointF QgsSymbolLayerUtils::polygonPointOnSurface( const QPolygonF &points, QLi
     {
       if ( rings )
       {
-        QList<QPolygonF>::const_iterator ringIt = rings->constBegin();
-        for ( ; ringIt != rings->constEnd(); ++ringIt )
+        for ( auto ringIt = rings->constBegin(); ringIt != rings->constEnd(); ++ringIt )
         {
           pointCount = ( *ringIt ).count();
           QgsPolylineXY polyline( pointCount );
@@ -4472,4 +4474,62 @@ QSet<const QgsSymbolLayer *> QgsSymbolLayerUtils::toSymbolLayerPointers( QgsFeat
   SymbolLayerVisitor visitor( symbolLayerIds );
   renderer->accept( &visitor );
   return visitor.mSymbolLayers;
+}
+
+QgsSymbol *QgsSymbolLayerUtils::restrictedSizeSymbol( const QgsSymbol *s, double minSize, double maxSize, QgsRenderContext *context, double &width, double &height )
+{
+  if ( !s || !context )
+  {
+    return 0;
+  }
+
+  double size;
+  const QgsMarkerSymbol *markerSymbol = dynamic_cast<const QgsMarkerSymbol *>( s );
+  const QgsLineSymbol *lineSymbol = dynamic_cast<const QgsLineSymbol *>( s );
+  if ( markerSymbol )
+  {
+    size = markerSymbol->size( *context );
+  }
+  else if ( lineSymbol )
+  {
+    size = lineSymbol->width( *context );
+  }
+  else
+  {
+    return 0; //not size restriction implemented for other symbol types
+  }
+
+  size /= context->scaleFactor();
+
+  if ( minSize > 0 && size < minSize )
+  {
+    size = minSize;
+  }
+  else if ( maxSize > 0 && size > maxSize )
+  {
+    size = maxSize;
+  }
+  else
+  {
+    return 0;
+  }
+
+  if ( markerSymbol )
+  {
+    QgsMarkerSymbol *ms = dynamic_cast<QgsMarkerSymbol *>( s->clone() );
+    ms->setSize( size );
+    ms->setSizeUnit( QgsUnitTypes::RenderMillimeters );
+    width = size;
+    height = size;
+    return ms;
+  }
+  else if ( lineSymbol )
+  {
+    QgsLineSymbol *ls = dynamic_cast<QgsLineSymbol *>( s->clone() );
+    ls->setWidth( size );
+    ls->setWidthUnit( QgsUnitTypes::RenderMillimeters );
+    height = size;
+    return ls;
+  }
+  return 0;
 }

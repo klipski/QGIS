@@ -179,6 +179,12 @@ namespace QgsWms
       bool isValidLayer( const QString &nickname ) const;
 
       /**
+       * Returns the group's layers list corresponding to the nickname, or
+       * an empty list if not found.
+       */
+      QList<QgsMapLayer *> layersFromGroup( const QString &nickname ) const;
+
+      /**
        * Returns true if \a name is a group.
        */
       bool isValidGroup( const QString &name ) const;
@@ -255,7 +261,7 @@ namespace QgsWms
       const QgsProject *mProject = nullptr;
       QgsServerInterface *mInterface = nullptr;
       QgsWmsParameters mParameters;
-      Flags mFlags = nullptr;
+      Flags mFlags = Flags();
       double mScaleDenominator = -1.0;
 
       // nickname of all layers defined within the project

@@ -25,6 +25,7 @@ QgsMapToolRegularPolygon2Points::QgsMapToolRegularPolygon2Points( QgsMapToolCapt
     QgsMapCanvas *canvas, CaptureMode mode )
   : QgsMapToolAddRegularPolygon( parentTool, canvas, mode )
 {
+  mToolName = tr( "Add regular polygon from 2 points" );
 }
 
 QgsMapToolRegularPolygon2Points::~QgsMapToolRegularPolygon2Points()
@@ -38,6 +39,15 @@ QgsMapToolRegularPolygon2Points::~QgsMapToolRegularPolygon2Points()
 void QgsMapToolRegularPolygon2Points::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
 {
   QgsPoint point = mapPoint( *e );
+
+  if ( !currentVectorLayer() )
+  {
+    notifyNotVectorLayer();
+    clean();
+    stopCapturing();
+    e->ignore();
+    return;
+  }
 
   if ( e->button() == Qt::LeftButton )
   {
@@ -56,11 +66,7 @@ void QgsMapToolRegularPolygon2Points::cadCanvasReleaseEvent( QgsMapMouseEvent *e
   {
     mPoints.append( point );
 
-    deactivate();
-    if ( mParentTool )
-    {
-      mParentTool->canvasReleaseEvent( e );
-    }
+    release( e );
   }
 }
 

@@ -58,7 +58,9 @@ defaultMenuEntries.update({'native:creategrid': researchToolsMenu,
                            'qgis:randomselectionwithinsubsets': researchToolsMenu,
                            'native:randompointsinextent': researchToolsMenu,
                            'qgis:randompointsinlayerbounds': researchToolsMenu,
+                           'native:randompointsinpolygons': researchToolsMenu,
                            'qgis:randompointsinsidepolygons': researchToolsMenu,
+                           'qgis:randompointsonlines': researchToolsMenu,
                            'qgis:regularpoints': researchToolsMenu,
                            'native:selectbylocation': researchToolsMenu,
                            'native:polygonfromlayerextent': researchToolsMenu})
@@ -89,7 +91,7 @@ defaultMenuEntries.update({'qgis:checkvalidity': geometryToolsMenu,
 managementToolsMenu = vectorMenu + "/" + Processing.tr('&Data Management Tools')
 defaultMenuEntries.update({'native:reprojectlayer': managementToolsMenu,
                            'native:joinattributesbylocation': managementToolsMenu,
-                           'qgis:splitvectorlayer': managementToolsMenu,
+                           'native:splitvectorlayer': managementToolsMenu,
                            'native:mergevectorlayers': managementToolsMenu,
                            'native:createspatialindex': managementToolsMenu})
 

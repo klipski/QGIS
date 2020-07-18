@@ -257,25 +257,26 @@ void QgsThreadedFeatureDownloader::run()
 
 // -------------------------
 
-static QgsFeatureRequest addSubsetToFeatureRequest( const QgsFeatureRequest &requestIn,
-    const QgsBackgroundCachedSharedData *shared )
-{
-  if ( shared->clientSideFilterExpression().isEmpty() )
-  {
-    return requestIn;
-  }
-  QgsFeatureRequest requestOut( requestIn );
-  requestOut.combineFilterExpression( shared->clientSideFilterExpression() );
-  return requestOut;
-}
-
 QgsBackgroundCachedFeatureIterator::QgsBackgroundCachedFeatureIterator(
   QgsBackgroundCachedFeatureSource *source, bool ownSource,
   std::shared_ptr<QgsBackgroundCachedSharedData> shared,
   const QgsFeatureRequest &request )
-  : QgsAbstractFeatureIteratorFromSource<QgsBackgroundCachedFeatureSource>( source, ownSource, addSubsetToFeatureRequest( request, shared.get() ) )
+  : QgsAbstractFeatureIteratorFromSource<QgsBackgroundCachedFeatureSource>( source, ownSource, request )
   , mShared( shared )
 {
+  if ( !shared->clientSideFilterExpression().isEmpty() )
+  {
+    // backup current request because combine filter expression will remove the fid(s) filtering
+    if ( mRequest.filterType() == QgsFeatureRequest::FilterFid || mRequest.filterType() == QgsFeatureRequest::FilterFids )
+    {
+      mAdditionalRequest = QgsFeatureRequest( shared->clientSideFilterExpression() );
+    }
+    else
+    {
+      mRequest.combineFilterExpression( shared->clientSideFilterExpression() );
+    }
+  }
+
   if ( mRequest.destinationCrs().isValid() && mRequest.destinationCrs() != mShared->sourceCrs() )
   {
     mTransform = QgsCoordinateTransform( mShared->sourceCrs(), mRequest.destinationCrs(), mRequest.transformContext() );
@@ -523,8 +524,7 @@ void QgsBackgroundCachedFeatureIterator::featureReceivedSynchronous( const QVect
   }
   if ( !mWriterFile && mWriterByteArray.size() > mWriteTransferThreshold )
   {
-    QString thisStr;
-    thisStr.sprintf( "%p", this );
+    const QString thisStr = QStringLiteral( "%1" ).arg( reinterpret_cast< quintptr >( this ), QT_POINTER_SIZE * 2, 16, QLatin1Char( '0' ) );
     ++ mCounter;
     mWriterFilename = QDir( mShared->acquireCacheDirectory() ).filePath( QStringLiteral( "iterator_%1_%2.bin" ).arg( thisStr ).arg( mCounter ) );
     QgsDebugMsgLevel( QStringLiteral( "Transferring feature iterator cache to %1" ).arg( mWriterFilename ), 4 );
@@ -597,6 +597,11 @@ bool QgsBackgroundCachedFeatureIterator::fetchFeature( QgsFeature &f )
     QgsGeometry constGeom = cachedFeature.geometry();
     if ( !mFilterRect.isNull() &&
          ( constGeom.isNull() || !constGeom.intersects( mFilterRect ) ) )
+    {
+      continue;
+    }
+
+    if ( !mAdditionalRequest.acceptFeature( cachedFeature ) )
     {
       continue;
     }
@@ -688,6 +693,11 @@ bool QgsBackgroundCachedFeatureIterator::fetchFeature( QgsFeature &f )
         QgsGeometry constGeom = feat.geometry();
         if ( !mFilterRect.isNull() &&
              ( constGeom.isNull() || !constGeom.intersects( mFilterRect ) ) )
+        {
+          continue;
+        }
+
+        if ( !mAdditionalRequest.acceptFeature( feat ) )
         {
           continue;
         }

@@ -32,6 +32,8 @@ a source and destination coordinate reference system.
       QString proj;
 
       bool isAvailable;
+
+      bool allowFallback;
     };
 
     QgsCoordinateOperationWidget( QWidget *parent = 0 );
@@ -115,7 +117,7 @@ Returns the details of the operation currently selected within the widget.
 .. seealso:: :py:func:`setSelectedOperation`
 %End
 
-    void setSelectedOperation( const QgsCoordinateOperationWidget::OperationDetails &operation ) const;
+    void setSelectedOperation( const QgsCoordinateOperationWidget::OperationDetails &operation );
 %Docstring
 Sets the details of the ``operation`` currently selected within the widget.
 
@@ -126,8 +128,15 @@ Sets the details of the ``operation`` currently selected within the widget.
 %Docstring
 Automatically sets the selected operation using the settings encapsulated in a transform ``context``.
 
-If no matching operations are found within the context then the defaultOperation() will be
+If no matching operations are found within the context then the :py:func:`~QgsCoordinateOperationWidget.defaultOperation` will be
 selected.
+%End
+
+    void setShowFallbackOption( bool visible );
+%Docstring
+Sets whether the "allow fallback" operations option is visible.
+
+.. versionadded:: 3.12
 %End
 
   signals:

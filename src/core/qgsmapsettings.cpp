@@ -45,7 +45,7 @@ QgsMapSettings::QgsMapSettings()
   updateDerived();
 }
 
-void QgsMapSettings::setMagnificationFactor( double factor )
+void QgsMapSettings::setMagnificationFactor( double factor, const QgsPointXY *center )
 {
   double ratio = mMagnificationFactor / factor;
 
@@ -55,7 +55,7 @@ void QgsMapSettings::setMagnificationFactor( double factor )
   setRotation( 0.0 );
 
   QgsRectangle ext = visibleExtent();
-  ext.scale( ratio );
+  ext.scale( ratio, center );
 
   mRotation = rot;
   mExtent = ext;
@@ -439,6 +439,7 @@ QgsRectangle QgsMapSettings::layerExtentToOutputExtent( const QgsMapLayer *layer
       QgsDebugMsgLevel( QStringLiteral( "sourceCrs = %1" ).arg( ct.sourceCrs().authid() ), 3 );
       QgsDebugMsgLevel( QStringLiteral( "destCRS = %1" ).arg( ct.destinationCrs().authid() ), 3 );
       QgsDebugMsgLevel( QStringLiteral( "extent %1" ).arg( extent.toString() ), 3 );
+      ct.setBallparkTransformsAreAppropriate( true );
       extent = ct.transformBoundingBox( extent );
     }
   }
@@ -458,6 +459,7 @@ QgsRectangle QgsMapSettings::outputExtentToLayerExtent( const QgsMapLayer *layer
   try
   {
     QgsCoordinateTransform ct = layerTransform( layer );
+    ct.setBallparkTransformsAreAppropriate( true );
     if ( ct.isValid() )
     {
       QgsDebugMsgLevel( QStringLiteral( "sourceCrs = %1" ).arg( ct.sourceCrs().authid() ), 3 );
@@ -678,6 +680,21 @@ QgsGeometry QgsMapSettings::labelBoundaryGeometry() const
 void QgsMapSettings::setLabelBoundaryGeometry( const QgsGeometry &boundary )
 {
   mLabelBoundaryGeometry = boundary;
+}
+
+void QgsMapSettings::addClippingRegion( const QgsMapClippingRegion &region )
+{
+  mClippingRegions.append( region );
+}
+
+void QgsMapSettings::setClippingRegions( const QList<QgsMapClippingRegion> &regions )
+{
+  mClippingRegions = regions;
+}
+
+QList<QgsMapClippingRegion> QgsMapSettings::clippingRegions() const
+{
+  return mClippingRegions;
 }
 
 void QgsMapSettings::addRenderedFeatureHandler( QgsRenderedFeatureHandlerInterface *handler )

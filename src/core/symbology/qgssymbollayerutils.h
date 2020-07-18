@@ -212,9 +212,10 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \param symbol symbol
      * \param size target pixmap size
      * \param padding space between icon edge and symbol
+     * \param shape optional legend patch shape to use for rendering the preview icon
      * \see symbolPreviewPixmap()
      */
-    static QIcon symbolPreviewIcon( const QgsSymbol *symbol, QSize size, int padding = 0 );
+    static QIcon symbolPreviewIcon( const QgsSymbol *symbol, QSize size, int padding = 0, QgsLegendPatchShape *shape = nullptr );
 
     /**
      * Returns a pixmap preview for a color ramp.
@@ -224,13 +225,16 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \param customContext render context to use when rendering symbol
      * \param selected set to TRUE to render the symbol in a selected state
      * \param expressionContext optional custom expression context
+     * \param shape optional legend patch shape to use for rendering the preview icon
      * \note Parameter customContext added in QGIS 2.6
      * \note Parameter selected added in QGIS 3.10
      * \note Parameter expressionContext added in QGIS 3.10
+     * \note Parameter shape added in QGIS 3.14
      * \see symbolPreviewIcon()
      */
     static QPixmap symbolPreviewPixmap( const QgsSymbol *symbol, QSize size, int padding = 0, QgsRenderContext *customContext = nullptr, bool selected = false,
-                                        const QgsExpressionContext *expressionContext = nullptr );
+                                        const QgsExpressionContext *expressionContext = nullptr,
+                                        const QgsLegendPatchShape *shape = nullptr );
 
     /**
      * Draws a symbol layer preview to a QPicture
@@ -639,7 +643,7 @@ class CORE_EXPORT QgsSymbolLayerUtils
     static QPointF polygonCentroid( const QPolygonF &points );
 
     //! Calculate a point on the surface of a QPolygonF
-    static QPointF polygonPointOnSurface( const QPolygonF &points, QList<QPolygonF> *rings = nullptr );
+    static QPointF polygonPointOnSurface( const QPolygonF &points, const QVector<QPolygonF> *rings = nullptr );
 
     //! Calculate whether a point is within of a QPolygonF
     static bool pointInPolygon( const QPolygonF &points, QPointF point );
@@ -724,6 +728,18 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \since QGIS 3.12
      */
     static QSet<const QgsSymbolLayer *> toSymbolLayerPointers( QgsFeatureRenderer *renderer, const QSet<QgsSymbolLayerId> &symbolLayerIds );
+
+    /**
+     * \brief Creates a new symbol with size restricted to min/max size if original size is out of min/max range
+     * \param s the original symbol
+     * \param minSize the minimum size in mm
+     * \param maxSize the maximum size in mm
+     * \param context the render context
+     * \param width expected width, can be changed by the function
+     * \param height expected height, can be changed by this function
+     * \return 0 if size is within minSize/maxSize range. New symbol if size was out of min/max range. Caller takes ownership
+     */
+    static QgsSymbol *restrictedSizeSymbol( const QgsSymbol *s, double minSize, double maxSize, QgsRenderContext *context, double &width, double &height );
 };
 
 class QPolygonF;

@@ -6,6 +6,9 @@ The server listens to localhost:8000, the address and port can be changed with t
 environment variable QGIS_SERVER_ADDRESS and QGIS_SERVER_PORT or passing <address>:<port>
 on the command line.
 
+All requests and application messages are printed to the standard output,
+while QGIS server internal logging is printed to stderr.
+
                               -------------------
   begin                : Jan 17 2020
   copyright            : (C) 2020by Alessandro Pasotti
@@ -88,14 +91,14 @@ int main( int argc, char *argv[] )
   // minimal, minimalegl, offscreen, wayland-egl, wayland, xcb.
   // https://www.ics.com/blog/qt-tips-and-tricks-part-1
   // http://doc.qt.io/qt-5/qpa.html
-  const char *display = qgetenv( "DISPLAY" );
+  const QString display { qgetenv( "DISPLAY" ) };
   bool withDisplay = true;
-  if ( !display )
+  if ( display.isEmpty() )
   {
     withDisplay = false;
     qputenv( "QT_QPA_PLATFORM", "offscreen" );
-    QgsMessageLog::logMessage( "DISPLAY not set, running in offscreen mode, all printing capabilities will not be available.", "Server", Qgis::Info );
   }
+
   // since version 3.0 QgsServer now needs a qApp so initialize QgsApplication
   QgsApplication app( argc, argv, withDisplay, QString(), QStringLiteral( "QGIS Development Server" ) );
 
@@ -103,6 +106,12 @@ int main( int argc, char *argv[] )
   QCoreApplication::setOrganizationDomain( QgsApplication::QGIS_ORGANIZATION_DOMAIN );
   QCoreApplication::setApplicationName( "QGIS Development Server" );
   QCoreApplication::setApplicationVersion( "1.0" );
+
+  if ( ! withDisplay )
+  {
+    QgsMessageLog::logMessage( "DISPLAY environment variable is not set, running in offscreen mode, all printing capabilities will not be available.\n"
+                               "Consider installing an X server like 'xvfb' and export DISPLAY to the actual display value.", "Server", Qgis::Warning );
+  }
 
 #ifdef Q_OS_WIN
   // Initialize font database before fcgi_accept.
@@ -130,10 +139,10 @@ int main( int argc, char *argv[] )
   parser.addHelpOption();
   parser.addVersionOption();
   parser.addPositionalArgument( QStringLiteral( "addressAndPort" ),
-                                QObject::tr( "Listen to address and port (default: \"localhost:8000\")\n"
+                                QObject::tr( "Address and port (default: \"localhost:8000\")\n"
                                     "address and port can also be specified with the environment\n"
                                     "variables QGIS_SERVER_ADDRESS and QGIS_SERVER_PORT." ), QStringLiteral( "[address:port]" ) );
-  QCommandLineOption logLevelOption( "l", QObject::tr( "Sets log level (default: 0)\n"
+  QCommandLineOption logLevelOption( "l", QObject::tr( "Log level (default: 0)\n"
                                      "0: INFO\n"
                                      "1: WARNING\n"
                                      "2: CRITICAL" ), "logLevel", "0" );
@@ -196,12 +205,6 @@ int main( int argc, char *argv[] )
   else
   {
     const int port { tcpServer.serverPort() };
-    std::cout << QObject::tr( "QGIS Development Server listening on http://%1:%2" )
-              .arg( ipAddress ).arg( port ).toStdString() << std::endl;
-
-#ifndef Q_OS_WIN
-    std::cout << QObject::tr( "CTRL+C to exit" ).toStdString() << std::endl;
-#endif
 
     QAtomicInt connCounter { 0 };
 
@@ -230,6 +233,12 @@ int main( int argc, char *argv[] )
     server.initPython();
 #endif
 
+    std::cout << QObject::tr( "QGIS Development Server listening on http://%1:%2" )
+              .arg( ipAddress ).arg( port ).toStdString() << std::endl;
+#ifndef Q_OS_WIN
+    std::cout << QObject::tr( "CTRL+C to exit" ).toStdString() << std::endl;
+#endif
+
     // Starts HTTP loop with a poor man's HTTP parser
     tcpServer.connect( &tcpServer, &QTcpServer::newConnection, [ & ]
     {
@@ -250,7 +259,7 @@ int main( int argc, char *argv[] )
       };
 
       // This will delete the connection when disconnected before ready read is called
-      clientConnection->connect( clientConnection, &QAbstractSocket::disconnected, context, connectionDeleter );
+      clientConnection->connect( clientConnection, &QAbstractSocket::disconnected, context, connectionDeleter, Qt::QueuedConnection );
 
       // Incoming connection parser
       clientConnection->connect( clientConnection, &QIODevice::readyRead, context, [ =, &server, &connCounter ] {
@@ -313,15 +322,6 @@ int main( int argc, char *argv[] )
             throw HttpException( QStringLiteral( "HTTP error unsupported method: %1" ).arg( methodString ) );
           }
 
-          // Build URL from env ...
-          QString url { qgetenv( "REQUEST_URI" ) };
-          // ... or from server ip/port and request path
-          if ( url.isEmpty() )
-          {
-            const QString path { firstLinePieces.at( 1 )};
-            url = QStringLiteral( "http://%1:%2%3" ).arg( ipAddress ).arg( port ).arg( path );
-          }
-
           const QString protocol { firstLinePieces.at( 2 )};
           if ( protocol != QStringLiteral( "HTTP/1.0" ) && protocol != QStringLiteral( "HTTP/1.1" ) )
           {
@@ -344,7 +344,24 @@ int main( int argc, char *argv[] )
             const int headerColonPos { headerLine.indexOf( ':' ) };
             if ( headerColonPos > 0 )
             {
-              headers.insert( headerLine.left( headerColonPos ), headerLine.mid( headerColonPos + 1 ) );
+              headers.insert( headerLine.left( headerColonPos ), headerLine.mid( headerColonPos + 2 ) );
+            }
+          }
+
+          // Build URL from env ...
+          QString url { qgetenv( "REQUEST_URI" ) };
+          // ... or from server ip/port and request path
+          if ( url.isEmpty() )
+          {
+            const QString path { firstLinePieces.at( 1 )};
+            // Take Host header if defined
+            if ( headers.contains( QStringLiteral( "Host" ) ) )
+            {
+              url = QStringLiteral( "http://%1%2" ).arg( headers.value( QStringLiteral( "Host" ) ) ).arg( path );
+            }
+            else
+            {
+              url = QStringLiteral( "http://%1:%2%3" ).arg( ipAddress ).arg( port ).arg( path );
             }
           }
 
@@ -363,7 +380,7 @@ int main( int argc, char *argv[] )
           if ( clientConnection->state() == QAbstractSocket::SocketState::ConnectedState )
           {
             clientConnection->connect( clientConnection, &QAbstractSocket::disconnected,
-                                       clientConnection, connectionDeleter );
+                                       clientConnection, connectionDeleter, Qt::QueuedConnection );
           }
           else
           {
@@ -393,12 +410,14 @@ int main( int argc, char *argv[] )
 
           // 10.185.248.71 [09/Jan/2015:19:12:06 +0000] 808840 <time> "GET / HTTP/1.1" 500"
           std::cout << QStringLiteral( "%1 [%2] %3 %4ms \"%5\" %6" )
-                    .arg( clientConnection->peerAddress().toString() )
-                    .arg( QDateTime::currentDateTime().toString() )
-                    .arg( body.size() )
-                    .arg( std::chrono::duration_cast<std::chrono::milliseconds>( elapsedTime ).count() )
-                    .arg( firstLinePieces.join( ' ' ) )
-                    .arg( response.statusCode() ).toStdString() << std::endl;
+                    .arg( clientConnection->peerAddress().toString(),
+                          QDateTime::currentDateTime().toString(),
+                          QString::number( body.size() ),
+                          QString::number( std::chrono::duration_cast<std::chrono::milliseconds>( elapsedTime ).count() ),
+                          firstLinePieces.join( ' ' ),
+                          QString::number( response.statusCode() ) )
+                    .toStdString()
+                    << std::endl;
 
           clientConnection->disconnectFromHost();
         }
@@ -431,7 +450,7 @@ int main( int argc, char *argv[] )
           clientConnection->disconnectFromHost();
         }
 
-      } );
+      }, Qt::QueuedConnection );
 
     } );
 

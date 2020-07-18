@@ -19,10 +19,12 @@
 #include "qgsogrprovider.h"
 #include "qgsmessagelog.h"
 #include "qgsproviderregistry.h"
+#include "qgsapplication.h"
 
 QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString &name )
   : QgsAbstractDatabaseProviderConnection( name )
 {
+  mProviderKey = QStringLiteral( "ogr" );
   setDefaultCapabilities();
   QgsSettings settings;
   settings.beginGroup( QStringLiteral( "ogr" ), QgsSettings::Section::Providers );
@@ -35,6 +37,7 @@ QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString 
 QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString &uri, const QVariantMap &configuration ):
   QgsAbstractDatabaseProviderConnection( uri, configuration )
 {
+  mProviderKey = QStringLiteral( "ogr" );
   // Cleanup the URI in case it contains other information other than the file path
   if ( uri.contains( '|' ) )
   {
@@ -178,6 +181,39 @@ void QgsGeoPackageProviderConnection::vacuum( const QString &schema, const QStri
   executeGdalSqlPrivate( QStringLiteral( "VACUUM" ) );
 }
 
+void QgsGeoPackageProviderConnection::createSpatialIndex( const QString &schema, const QString &name, const QgsAbstractDatabaseProviderConnection::SpatialIndexOptions &options ) const
+{
+  checkCapability( Capability::CreateSpatialIndex );
+  if ( ! schema.isEmpty() )
+  {
+    QgsMessageLog::logMessage( QStringLiteral( "Schema is not supported by GPKG, ignoring" ), QStringLiteral( "OGR" ), Qgis::Info );
+  }
+  executeGdalSqlPrivate( QStringLiteral( "SELECT CreateSpatialIndex(%1, %2)" ).arg( QgsSqliteUtils::quotedString( name ),
+                         QgsSqliteUtils::quotedString( ( options.geometryColumnName ) ) ) );
+}
+
+bool QgsGeoPackageProviderConnection::spatialIndexExists( const QString &schema, const QString &name, const QString &geometryColumn ) const
+{
+  checkCapability( Capability::CreateSpatialIndex );
+  if ( ! schema.isEmpty() )
+  {
+    QgsMessageLog::logMessage( QStringLiteral( "Schema is not supported by GPKG, ignoring" ), QStringLiteral( "OGR" ), Qgis::Info );
+  }
+  const QList<QVariantList> res = executeGdalSqlPrivate( QStringLiteral( "SELECT HasSpatialIndex(%1, %2)" ).arg( QgsSqliteUtils::quotedString( name ),
+                                  QgsSqliteUtils::quotedString( geometryColumn ) ) );
+  return !res.isEmpty() && !res.at( 0 ).isEmpty() && res.at( 0 ).at( 0 ).toBool();
+}
+
+void QgsGeoPackageProviderConnection::deleteSpatialIndex( const QString &schema, const QString &name, const QString &geometryColumn ) const
+{
+  checkCapability( Capability::DeleteSpatialIndex );
+  if ( ! schema.isEmpty() )
+  {
+    QgsMessageLog::logMessage( QStringLiteral( "Schema is not supported by GPKG, ignoring" ), QStringLiteral( "OGR" ), Qgis::Info );
+  }
+  executeGdalSqlPrivate( QStringLiteral( "SELECT DisableSpatialIndex(%1, %2)" ).arg( QgsSqliteUtils::quotedString( name ),
+                         QgsSqliteUtils::quotedString( geometryColumn ) ) );
+}
 
 QList<QgsGeoPackageProviderConnection::TableProperty> QgsGeoPackageProviderConnection::tables( const QString &schema, const TableFlags &flags ) const
 {
@@ -262,6 +298,11 @@ QList<QgsGeoPackageProviderConnection::TableProperty> QgsGeoPackageProviderConne
   return tableInfo ;
 }
 
+QIcon QgsGeoPackageProviderConnection::icon() const
+{
+  return QgsApplication::getThemeIcon( QStringLiteral( "mGeoPackage.svg" ) );
+}
+
 void QgsGeoPackageProviderConnection::setDefaultCapabilities()
 {
   mCapabilities =
@@ -274,6 +315,11 @@ void QgsGeoPackageProviderConnection::setDefaultCapabilities()
     Capability::Spatial,
     Capability::TableExists,
     Capability::ExecuteSql,
+    Capability::CreateSpatialIndex,
+    Capability::SpatialIndexExists,
+    Capability::DeleteSpatialIndex,
+    Capability::DeleteField,
+    Capability::AddField
   };
 #if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(2,4,0)
   mCapabilities |= Capability::DropRasterTable;

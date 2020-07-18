@@ -102,17 +102,18 @@ int QgsLayoutModel::rowCount( const QModelIndex &parent ) const
     return mItemsInScene.size() + 1;
   }
 
+#if 0
   QGraphicsItem *parentItem = itemFromIndex( parent );
 
-  if ( !parentItem )
+  if ( parentItem )
   {
-    return mItemsInScene.size() + 1;
-  }
-  else
-  {
-    //no children for now
+    // return child count for item
     return 0;
   }
+#endif
+
+  //no children for now
+  return 0;
 }
 
 int QgsLayoutModel::columnCount( const QModelIndex &parent ) const
@@ -169,7 +170,7 @@ QVariant QgsLayoutModel::data( const QModelIndex &index, int role ) const
       return item->uuid();
     case Qt::UserRole+1:
       //user role stores reference in column object
-      return qVariantFromValue( qobject_cast<QObject *>( item ) );
+      return QVariant::fromValue( qobject_cast<QObject *>( item ) );
 
     case Qt::TextAlignmentRole:
       return Qt::AlignLeft & Qt::AlignVCenter;
@@ -243,11 +244,11 @@ QVariant QgsLayoutModel::headerData( int section, Qt::Orientation orientation, i
     {
       if ( section == Visibility )
       {
-        return qVariantFromValue( QgsApplication::getThemeIcon( QStringLiteral( "/mActionShowAllLayersGray.svg" ) ) );
+        return QVariant::fromValue( QgsApplication::getThemeIcon( QStringLiteral( "/mActionShowAllLayersGray.svg" ) ) );
       }
       else if ( section == LockStatus )
       {
-        return qVariantFromValue( QgsApplication::getThemeIcon( QStringLiteral( "/lockedGray.svg" ) ) );
+        return QVariant::fromValue( QgsApplication::getThemeIcon( QStringLiteral( "/lockedGray.svg" ) ) );
       }
 
       return QVariant();

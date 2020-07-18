@@ -30,11 +30,21 @@ QgsMapToolRectangleCenter::QgsMapToolRectangleCenter( QgsMapToolCapture *parentT
     QgsMapCanvas *canvas, CaptureMode mode )
   : QgsMapToolAddRectangle( parentTool, canvas, mode )
 {
+  mToolName = tr( "Add rectangle from center and a point" );
 }
 
 void QgsMapToolRectangleCenter::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
 {
   QgsPoint point = mapPoint( *e );
+
+  if ( !currentVectorLayer() )
+  {
+    notifyNotVectorLayer();
+    clean();
+    stopCapturing();
+    e->ignore();
+    return;
+  }
 
   if ( e->button() == Qt::LeftButton )
   {
@@ -51,11 +61,7 @@ void QgsMapToolRectangleCenter::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
   {
     mPoints.append( point );
 
-    deactivate();
-    if ( mParentTool )
-    {
-      mParentTool->canvasReleaseEvent( e );
-    }
+    release( e );
   }
 }
 

@@ -81,24 +81,23 @@ void QgsO2::initOAuthConfig()
   setApiKey( mOAuth2Config->apiKey() );
   setExtraRequestParams( mOAuth2Config->queryPairs() );
 
-  O2::GrantFlow o2flow;
   switch ( mOAuth2Config->grantFlow() )
   {
     case QgsAuthOAuth2Config::AuthCode:
-      o2flow = O2::GrantFlowAuthorizationCode;
+      setGrantFlow( O2::GrantFlowAuthorizationCode );
       setRequestUrl( mOAuth2Config->requestUrl() );
       setClientId( mOAuth2Config->clientId() );
       setClientSecret( mOAuth2Config->clientSecret() );
 
       break;
     case QgsAuthOAuth2Config::Implicit:
-      o2flow = O2::GrantFlowImplicit;
+      setGrantFlow( O2::GrantFlowImplicit );
       setRequestUrl( mOAuth2Config->requestUrl() );
       setClientId( mOAuth2Config->clientId() );
 
       break;
     case QgsAuthOAuth2Config::ResourceOwner:
-      o2flow = O2::GrantFlowResourceOwnerPasswordCredentials;
+      setGrantFlow( O2::GrantFlowResourceOwnerPasswordCredentials );
       setClientId( mOAuth2Config->clientId() );
       setClientSecret( mOAuth2Config->clientSecret() );
       setUsername( mOAuth2Config->username() );
@@ -106,7 +105,6 @@ void QgsO2::initOAuthConfig()
 
       break;
   }
-  setGrantFlow( o2flow );
 
   setSettingsStore( mOAuth2Config->persistToken() );
 
@@ -233,7 +231,7 @@ void QgsO2::link()
     QUrl url( tokenUrl_ );
     QNetworkRequest tokenRequest( url );
     QgsSetRequestInitiatorClass( tokenRequest, QStringLiteral( "QgsO2" ) );
-    tokenRequest.setHeader( QNetworkRequest::ContentTypeHeader, QLatin1Literal( "application/x-www-form-urlencoded" ) );
+    tokenRequest.setHeader( QNetworkRequest::ContentTypeHeader, QLatin1String( "application/x-www-form-urlencoded" ) );
     QNetworkReply *tokenReply = getManager()->post( tokenRequest, payload );
 
     connect( tokenReply, SIGNAL( finished() ), this, SLOT( onTokenReplyFinished() ), Qt::QueuedConnection );

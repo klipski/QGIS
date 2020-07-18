@@ -48,6 +48,7 @@ relevant symbology elements to render them.
       OffsetFromLabel,
       DrawCalloutToAllParts,
       AnchorPointPosition,
+      LabelAnchorPointPosition,
     };
 
     enum DrawOrder
@@ -62,6 +63,20 @@ relevant symbology elements to render them.
       PointOnExterior,
       PointOnSurface,
       Centroid,
+    };
+
+    enum LabelAnchorPoint
+    {
+      LabelPointOnExterior,
+      LabelCentroid,
+      LabelTopLeft,
+      LabelTopMiddle,
+      LabelTopRight,
+      LabelMiddleLeft,
+      LabelMiddleRight,
+      LabelBottomLeft,
+      LabelBottomMiddle,
+      LabelBottomRight,
     };
 
     QgsCallout();
@@ -87,7 +102,7 @@ Caller takes ownership of the returned object.
 Returns the properties describing the callout encoded in a
 string format.
 
-Subclasses must ensure that they include the base class' properties()
+Subclasses must ensure that they include the base class' :py:func:`~QgsCallout.properties`
 in their returned value.
 
 .. seealso:: :py:func:`readProperties`
@@ -100,7 +115,7 @@ in their returned value.
 Reads a string map of an callout's properties and restores the callout
 to the state described by the properties map.
 
-Subclasses must ensure that they call the base class' readProperties()
+Subclasses must ensure that they call the base class' :py:func:`~QgsCallout.readProperties`
 method.
 
 .. seealso:: :py:func:`properties`
@@ -110,7 +125,7 @@ method.
 %Docstring
 Saves the current state of the callout to a DOM ``element``. The default
 behavior is to save the properties string map returned by
-properties().
+:py:func:`~QgsCallout.properties`.
 
 :return: ``True`` if save was successful
 
@@ -121,7 +136,7 @@ properties().
 %Docstring
 Restores the callout's properties from a DOM element.
 
-The default behavior is the read the DOM contents and call readProperties() on the subclass.
+The default behavior is the read the DOM contents and call :py:func:`~QgsCallout.readProperties` on the subclass.
 
 .. seealso:: :py:func:`readProperties`
 %End
@@ -132,8 +147,8 @@ Prepares the callout for rendering on the specified render ``context``.
 
 .. warning::
 
-   This MUST be called prior to calling render() on the callout, and must always
-   be accompanied by a corresponding call to stopRender().
+   This MUST be called prior to calling :py:func:`~QgsCallout.render` on the callout, and must always
+   be accompanied by a corresponding call to :py:func:`~QgsCallout.stopRender`.
 
 .. seealso:: :py:func:`stopRender`
 %End
@@ -144,8 +159,8 @@ Finalises the callout after a set of rendering operations on the specified rende
 
 .. warning::
 
-   This MUST be called after to after render() operations on the callout, and must always
-   be accompanied by a corresponding prior call to startRender().
+   This MUST be called after to after :py:func:`~QgsCallout.render` operations on the callout, and must always
+   be accompanied by a corresponding prior call to :py:func:`~QgsCallout.startRender`.
 
 .. seealso:: :py:func:`startRender`
 %End
@@ -157,7 +172,7 @@ required by any data defined properties associated with the callout.
 
 .. warning::
 
-   This must only be called after a corresponding call to startRender() with
+   This must only be called after a corresponding call to :py:func:`~QgsCallout.startRender` with
    the same render ``context``.
 %End
 
@@ -194,8 +209,8 @@ how a callout is being rendered.
 
 .. warning::
 
-   A prior call to startRender() must have been made before calling this method, and
-   after all render() operations are complete a call to stopRender() must be made.
+   A prior call to :py:func:`~QgsCallout.startRender` must have been made before calling this method, and
+   after all :py:func:`~QgsCallout.render` operations are complete a call to :py:func:`~QgsCallout.stopRender` must be made.
 %End
 
     bool enabled() const;
@@ -272,6 +287,51 @@ anchor point.
 .. seealso:: :py:func:`encodeAnchorPoint`
 %End
 
+
+    LabelAnchorPoint labelAnchorPoint() const;
+%Docstring
+Returns the label's anchor point position.
+
+.. seealso:: :py:func:`setLabelAnchorPoint`
+
+.. versionadded:: 3.14
+%End
+
+    void setLabelAnchorPoint( LabelAnchorPoint anchor );
+%Docstring
+Sets the label's ``anchor`` point position.
+
+.. seealso:: :py:func:`labelAnchorPoint`
+
+.. versionadded:: 3.14
+%End
+
+    static QString encodeLabelAnchorPoint( LabelAnchorPoint anchor );
+%Docstring
+Encodes a label ``anchor`` point to its string representation.
+
+:return: encoded string
+
+.. seealso:: :py:func:`decodeLabelAnchorPoint`
+
+.. versionadded:: 3.14
+%End
+
+    static QgsCallout::LabelAnchorPoint decodeLabelAnchorPoint( const QString &name, bool *ok = 0 );
+%Docstring
+Attempts to decode a string representation of a label anchor point name to the corresponding
+anchor point.
+
+:param name: encoded label anchor point name
+:param ok: if specified, will be set to ``True`` if the anchor point was successfully decoded
+
+:return: decoded name
+
+.. seealso:: :py:func:`encodeLabelAnchorPoint`
+
+.. versionadded:: 3.14
+%End
+
   protected:
 
     virtual void draw( QgsRenderContext &context, QRectF bodyBoundingBox, const double angle, const QgsGeometry &anchor, QgsCalloutContext &calloutContext ) = 0;
@@ -292,6 +352,13 @@ Both ``rect`` and ``anchor`` are specified in painter coordinates (i.e. pixels).
 
 The ``calloutContext`` argument is used to specify additional contextual information about
 how a callout is being rendered.
+%End
+
+    QgsGeometry labelAnchorGeometry( QRectF bodyBoundingBox, const double angle, LabelAnchorPoint anchor ) const;
+%Docstring
+Returns the anchor point geometry for a label with the given bounding box and ``anchor`` point mode.
+
+.. versionadded:: 3.14
 %End
 
 };
@@ -317,7 +384,7 @@ A simple direct line callout style.
 %Docstring
 Creates a new QgsSimpleLineCallout, using the settings
 serialized in the ``properties`` map (corresponding to the output from
-QgsSimpleLineCallout.properties() ).
+:py:func:`QgsSimpleLineCallout.properties()` ).
 %End
 
     virtual QString type() const;
@@ -354,7 +421,7 @@ transferred to the callout.
 
     double minimumLength() const;
 %Docstring
-Returns the minimum length of callout lines. Units are specified through minimumLengthUnits().
+Returns the minimum length of callout lines. Units are specified through :py:func:`~QgsSimpleLineCallout.minimumLengthUnits`.
 
 .. seealso:: :py:func:`setMinimumLength`
 
@@ -363,7 +430,7 @@ Returns the minimum length of callout lines. Units are specified through minimum
 
     void setMinimumLength( double length );
 %Docstring
-Sets the minimum ``length`` of callout lines. Units are specified through setMinimumLengthUnit().
+Sets the minimum ``length`` of callout lines. Units are specified through :py:func:`~QgsSimpleLineCallout.setMinimumLengthUnit`.
 
 .. seealso:: :py:func:`minimumLength`
 
@@ -413,7 +480,7 @@ Returns the map unit scale for the minimum callout length.
 
     double offsetFromAnchor() const;
 %Docstring
-Returns the offset distance from the anchor point at which to start the line. Units are specified through offsetFromAnchorUnit().
+Returns the offset distance from the anchor point at which to start the line. Units are specified through :py:func:`~QgsSimpleLineCallout.offsetFromAnchorUnit`.
 
 .. seealso:: :py:func:`setOffsetFromAnchor`
 
@@ -422,7 +489,7 @@ Returns the offset distance from the anchor point at which to start the line. Un
 
     void setOffsetFromAnchor( double distance );
 %Docstring
-Sets the offset ``distance`` from the anchor point at which to start the line. Units are specified through setOffsetFromAnchorUnit().
+Sets the offset ``distance`` from the anchor point at which to start the line. Units are specified through :py:func:`~QgsSimpleLineCallout.setOffsetFromAnchorUnit`.
 
 .. seealso:: :py:func:`offsetFromAnchor`
 
@@ -471,7 +538,7 @@ Returns the map unit scale for the offset from anchor.
 
     double offsetFromLabel() const;
 %Docstring
-Returns the offset distance from label area at which to end the line. Units are specified through offsetFromLabelUnit().
+Returns the offset distance from label area at which to end the line. Units are specified through :py:func:`~QgsSimpleLineCallout.offsetFromLabelUnit`.
 
 .. seealso:: :py:func:`setOffsetFromLabel`
 
@@ -480,7 +547,7 @@ Returns the offset distance from label area at which to end the line. Units are 
 
     void setOffsetFromLabel( double distance );
 %Docstring
-Sets the offset ``distance`` from label area at which to end the line. Units are specified through setOffsetFromLabelUnit().
+Sets the offset ``distance`` from label area at which to end the line. Units are specified through :py:func:`~QgsSimpleLineCallout.setOffsetFromLabelUnit`.
 
 .. seealso:: :py:func:`offsetFromLabel`
 
@@ -571,7 +638,7 @@ Draws straight (right angled) lines as callouts.
 %Docstring
 Creates a new QgsManhattanLineCallout, using the settings
 serialized in the ``properties`` map (corresponding to the output from
-QgsManhattanLineCallout.properties() ).
+:py:func:`QgsManhattanLineCallout.properties()` ).
 %End
 
     virtual QString type() const;

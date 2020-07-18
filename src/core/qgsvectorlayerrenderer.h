@@ -26,6 +26,7 @@ class QgsDiagramLayerSettings;
 
 class QgsFeatureIterator;
 class QgsSingleSymbolRenderer;
+class QgsMapClippingRegion;
 
 #define SIP_NO_FILE
 
@@ -122,6 +123,8 @@ class QgsVectorLayerRenderer : public QgsMapLayerRenderer
 
     QgsFeatureIds mSelectedFeatureIds;
 
+    QString mTemporalFilter;
+
     QgsVectorLayerFeatureSource *mSource = nullptr;
 
     QgsFeatureRenderer *mRenderer = nullptr;
@@ -156,6 +159,15 @@ class QgsVectorLayerRenderer : public QgsMapLayerRenderer
 
     QgsVectorSimplifyMethod mSimplifyMethod;
     bool mSimplifyGeometry;
+
+    QList< QgsMapClippingRegion > mClippingRegions;
+    QgsGeometry mClipFilterGeom;
+    bool mApplyClipFilter = false;
+    QgsGeometry mClipFeatureGeom;
+    bool mApplyClipGeometries = false;
+    QgsGeometry mLabelClipFeatureGeom;
+    bool mApplyLabelClipGeometries = false;
+
 };
 
 

@@ -33,6 +33,7 @@ class QTextCodec;
 #include "qgsfeaturesink.h"
 #include "qgsfeaturesource.h"
 #include "qgsfeaturerequest.h"
+#include "qgsvectordataprovidertemporalcapabilities.h"
 
 typedef QList<int> QgsAttributeList SIP_SKIP;
 typedef QSet<int> QgsAttributeIds SIP_SKIP;
@@ -197,7 +198,7 @@ class CORE_EXPORT QgsVectorDataProvider : public QgsDataProvider, public QgsFeat
      * Returns a short comment for the data that this provider is
      * providing access to (e.g. the comment for postgres table).
      */
-    virtual QString dataComment() const;
+    virtual QString dataComment() const override;
 
     /**
      * Returns the minimum value of an attribute
@@ -258,7 +259,7 @@ class CORE_EXPORT QgsVectorDataProvider : public QgsDataProvider, public QgsFeat
      */
     virtual void enumValues( int index, QStringList &enumList SIP_OUT ) const { Q_UNUSED( index ) enumList.clear(); }
 
-    bool addFeatures( QgsFeatureList &flist SIP_INOUT, QgsFeatureSink::Flags flags = nullptr ) override;
+    bool addFeatures( QgsFeatureList &flist SIP_INOUT, QgsFeatureSink::Flags flags = QgsFeatureSink::Flags() ) override;
 
     /**
      * Deletes one or more features from the provider. This requires the DeleteFeatures capability.
@@ -314,6 +315,8 @@ class CORE_EXPORT QgsVectorDataProvider : public QgsDataProvider, public QgsFeat
     /**
      * Changes attribute values of existing features. This should
      * succeed if the provider reports the ChangeAttributeValues capability.
+     * The method returns FALSE if the provider does not have ChangeAttributeValues
+     * capability or if any of the changes could not be successfully applied.
      * \param attr_map a map containing changed attributes
      * \returns TRUE in case of success and FALSE in case of failure
      */
@@ -616,6 +619,9 @@ class CORE_EXPORT QgsVectorDataProvider : public QgsDataProvider, public QgsFeat
      */
     virtual void handlePostCloneOperations( QgsVectorDataProvider *source );
 
+    QgsVectorDataProviderTemporalCapabilities *temporalCapabilities() override;
+    const QgsVectorDataProviderTemporalCapabilities *temporalCapabilities() const override SIP_SKIP;
+
   signals:
 
     /**
@@ -685,6 +691,8 @@ class CORE_EXPORT QgsVectorDataProvider : public QgsDataProvider, public QgsFeat
 
     //! List of errors
     mutable QStringList mErrors;
+
+    std::unique_ptr< QgsVectorDataProviderTemporalCapabilities > mTemporalCapabilities;
 
     static QStringList sEncodings;
 

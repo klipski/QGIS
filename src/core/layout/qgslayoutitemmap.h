@@ -25,9 +25,121 @@
 #include "qgslayoutitemmapgrid.h"
 #include "qgslayoutitemmapoverview.h"
 #include "qgsmaprendererstagedrenderjob.h"
+#include "qgstemporalrangeobject.h"
 
 class QgsAnnotation;
 class QgsRenderedFeatureHandlerInterface;
+
+/**
+ * \ingroup core
+ * \class QgsLayoutItemMapAtlasClippingSettings
+ * \brief Contains settings relating to clipping a layout map by the current atlas feature.
+ * \since QGIS 3.16
+ */
+class CORE_EXPORT QgsLayoutItemMapAtlasClippingSettings : public QObject
+{
+    Q_OBJECT
+
+  public:
+
+    /**
+     * Constructor for QgsLayoutItemMapAtlasClippingSettings, with the specified \a map parent.
+     */
+    QgsLayoutItemMapAtlasClippingSettings( QgsLayoutItemMap *map SIP_TRANSFERTHIS = nullptr );
+
+    /**
+     * Returns TRUE if the map content should be clipped to the current atlas feature.
+     *
+     * \see setEnabled()
+     */
+    bool enabled() const;
+
+    /**
+     * Sets whether the map content should be clipped to the current atlas feature.
+     *
+     * \see enabled()
+     */
+    void setEnabled( bool enabled );
+
+    /**
+     * Returns the feature clipping type to apply when clipping to the current atlas feature.
+     *
+     * \see setFeatureClippingType()
+     */
+    QgsMapClippingRegion::FeatureClippingType featureClippingType() const;
+
+    /**
+     * Sets the feature clipping \a type to apply when clipping to the current atlas feature.
+     *
+     * \see featureClippingType()
+     */
+    void setFeatureClippingType( QgsMapClippingRegion::FeatureClippingType type );
+
+    /**
+     * Returns TRUE if labels should only be placed inside the atlas feature geometry.
+     *
+     * \see setForceLabelsInsideFeature()
+     */
+    bool forceLabelsInsideFeature() const;
+
+    /**
+     * Sets whether labels should only be placed inside the atlas feature geometry.
+     *
+     * \see forceLabelsInsideFeature()
+     */
+    void setForceLabelsInsideFeature( bool forceInside );
+
+    /**
+     * Returns the list of map layers to clip to the atlas feature.
+     *
+     * If the returned list is empty then all layers will be clipped.
+     *
+     * \see setLayersToClip()
+     */
+    QList< QgsMapLayer * > layersToClip() const;
+
+    /**
+     * Sets the list of map \a layers to clip to the atlas feature.
+     *
+     * If the \a layers list is empty then all layers will be clipped.
+     *
+     * \see layersToClip()
+     */
+    void setLayersToClip( const QList< QgsMapLayer * > &layers );
+
+    /**
+     * Stores settings in a DOM element, where \a element is the DOM element
+     * corresponding to a 'LayoutMap' tag.
+     * \see readXml()
+     */
+    bool writeXml( QDomElement &element, QDomDocument &document, const QgsReadWriteContext &context ) const;
+
+    /**
+     * Sets the setting's state from a DOM document, where \a element is the DOM
+     * node corresponding to a 'LayoutMap' tag.
+     * \see writeXml()
+     */
+    bool readXml( const QDomElement &element, const QDomDocument &doc, const QgsReadWriteContext &context );
+
+  signals:
+
+    /**
+     * Emitted when the atlas clipping settings are changed.
+     */
+    void changed();
+
+  private slots:
+    void layersAboutToBeRemoved( const QList<QgsMapLayer *> &layers );
+
+  private:
+
+    QgsLayoutItemMap *mMap = nullptr;
+    bool mClipToAtlasFeature = false;
+    QList< QgsMapLayerRef > mLayersToClip;
+    QgsMapClippingRegion::FeatureClippingType mFeatureClippingType = QgsMapClippingRegion::FeatureClippingType::ClipPainterOnly;
+    bool mForceLabelsInsideFeature = false;
+};
+
 
 /**
  * \ingroup core
@@ -35,7 +147,7 @@ class QgsRenderedFeatureHandlerInterface;
  * \brief Layout graphical items for displaying a map.
  * \since QGIS 3.0
  */
-class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
+class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem, public QgsTemporalRangeObject
 {
 
     Q_OBJECT
@@ -285,20 +397,24 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
     /**
      * Sets whether the map should follow a map theme. See followVisibilityPreset() for more details.
      */
-    void setFollowVisibilityPreset( bool follow ) { mFollowVisibilityPreset = follow; }
+    void setFollowVisibilityPreset( bool follow );
 
     /**
      * Preset name that decides which layers and layer styles are used for map rendering. It is only
      * used when followVisibilityPreset() returns TRUE.
      * \see setFollowVisibilityPresetName()
+     *
+     * \see themeChanged()
      */
     QString followVisibilityPresetName() const { return mFollowVisibilityPresetName; }
 
     /**
      * Sets preset name for map rendering. See followVisibilityPresetName() for more details.
      * \see followVisibilityPresetName()
+     *
+     * \see themeChanged()
     */
-    void setFollowVisibilityPresetName( const QString &name ) { mFollowVisibilityPresetName = name; }
+    void setFollowVisibilityPresetName( const QString &name );
 
     void moveContent( double dx, double dy ) override;
     void setMoveContentPreviewOffset( double dx, double dy ) override;
@@ -554,6 +670,13 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
      */
     QTransform layoutToMapCoordsTransform() const;
 
+    /**
+     * Returns the map's atlas clipping settings.
+     *
+     * \since QGIS 3.16
+     */
+    QgsLayoutItemMapAtlasClippingSettings *atlasClippingSettings() { return mAtlasClippingSettings; }
+
   protected:
 
     void draw( QgsLayoutItemRenderContext &context ) override;
@@ -602,6 +725,16 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
      */
     void layerStyleOverridesChanged();
 
+    /**
+     * Emitted when the map's associated \a theme is changed.
+     *
+     * \note This signal is not emitted when the definition of the theme changes, only the map
+     * is linked to a different theme then it previously was.
+     *
+     * \since QGIS 3.14
+     */
+    void themeChanged( const QString &theme );
+
   public slots:
 
     void refresh() override;
@@ -621,6 +754,9 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
     void shapeChanged();
 
     void mapThemeChanged( const QString &theme );
+
+    //! Renames the active map theme called \a theme to \a newTheme
+    void currentMapThemeRenamed( const QString &theme, const QString &newTheme );
 
     //! Create cache image
     void recreateCachedImageInBackground();
@@ -715,6 +851,9 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
      * Map theme name to be used for map's layers and styles in case mFollowVisibilityPreset
      *  is TRUE. May be overridden by data-defined expression. */
     QString mFollowVisibilityPresetName;
+
+    //! Name of the last data-defined evaluated theme name
+    QString mLastEvaluatedThemeName;
 
     /**
      * \brief Draw to paint device
@@ -821,6 +960,8 @@ class CORE_EXPORT QgsLayoutItemMap : public QgsLayoutItem
     PartType mCurrentExportPart = NotLayered;
     QStringList mExportThemes;
     QStringList::iterator mExportThemeIt;
+
+    QgsLayoutItemMapAtlasClippingSettings *mAtlasClippingSettings = nullptr;
 
     /**
      * Refresh the map's extents, considering data defined extent, scale and rotation

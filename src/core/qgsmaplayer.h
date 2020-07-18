@@ -47,6 +47,7 @@ class QgsMapLayerRenderer;
 class QgsMapLayerStyleManager;
 class QgsProject;
 class QgsStyleEntityVisitorInterface;
+class QgsMapLayerTemporalProperties;
 
 class QDomDocument;
 class QKeyEvent;
@@ -68,7 +69,8 @@ enum class QgsMapLayerType SIP_MONKEYPATCH_SCOPEENUM_UNNEST( QgsMapLayer, LayerT
   VectorLayer,
   RasterLayer,
   PluginLayer,
-  MeshLayer      //!< Added in 3.2
+  MeshLayer,      //!< Added in 3.2
+  VectorTileLayer //!< Added in 3.14
 };
 
 /**
@@ -106,6 +108,9 @@ class CORE_EXPORT QgsMapLayer : public QObject
           break;
         case QgsMapLayerType::MeshLayer:
           sipType = sipType_QgsMeshLayer;
+          break;
+        case QgsMapLayerType::VectorTileLayer:
+          sipType = sipType_QgsVectorTileLayer;
           break;
         default:
           sipType = nullptr;
@@ -162,8 +167,9 @@ class CORE_EXPORT QgsMapLayer : public QObject
       CustomProperties   = 1 << 11, //!< Custom properties (by plugins for instance)
       GeometryOptions    = 1 << 12, //!< Geometry validation configuration
       Relations          = 1 << 13, //!< Relations
+      Temporal           = 1 << 14, //!< Temporal properties
       AllStyleCategories = LayerConfiguration | Symbology | Symbology3D | Labeling | Fields | Forms | Actions |
-                           MapTips | Diagrams | AttributeTable | Rendering | CustomProperties | GeometryOptions | Relations,
+                           MapTips | Diagrams | AttributeTable | Rendering | CustomProperties | GeometryOptions | Relations | Temporal,
     };
     Q_ENUM( StyleCategory )
     Q_DECLARE_FLAGS( StyleCategories, StyleCategory )
@@ -526,8 +532,9 @@ class CORE_EXPORT QgsMapLayer : public QObject
     /**
      * Returns TRUE if the layer is considered a temporary layer.
      *
-     * These include memory-only layers such as those created by the "memory" data provider, or layers
-     * stored inside a local temporary folder (such as the "/tmp" folder on Linux).
+     * These include memory-only layers such as those created by the "memory" data provider, layers
+     * stored inside a local temporary folder (such as the "/tmp" folder on Linux)
+     * or layer with temporary data (as temporary mesh layer dataset)
      *
      * \since QGIS 3.10.1
      */
@@ -560,7 +567,7 @@ class CORE_EXPORT QgsMapLayer : public QObject
      *
      * \returns TRUE if successful
      */
-    bool readLayerXml( const QDomElement &layerElement, QgsReadWriteContext &context, QgsMapLayer::ReadFlags flags = nullptr );
+    bool readLayerXml( const QDomElement &layerElement, QgsReadWriteContext &context, QgsMapLayer::ReadFlags flags = QgsMapLayer::ReadFlags() );
 
     /**
      * Stores state in DOM node
@@ -612,6 +619,13 @@ class CORE_EXPORT QgsMapLayer : public QObject
      * \since QGIS 3.0
      */
     void setCustomProperties( const QgsObjectCustomProperties &properties );
+
+    /**
+     * Read all custom properties from layer. Properties are stored in a map and saved in project file.
+     * \see setCustomProperties
+     * \since QGIS 3.14
+     */
+    const QgsObjectCustomProperties &customProperties() const;
 
     /**
      * Remove a custom property from layer. Properties are stored in a map and saved in project file.
@@ -1173,6 +1187,13 @@ class CORE_EXPORT QgsMapLayer : public QObject
      */
     virtual bool accept( QgsStyleEntityVisitorInterface *visitor ) const;
 
+    /**
+     * Returns the layer's temporal properties. This may be NULLPTR, depending on the layer type.
+     *
+     * \since QGIS 3.14
+     */
+    virtual QgsMapLayerTemporalProperties *temporalProperties() { return nullptr; }
+
   public slots:
 
     /**
@@ -1258,7 +1279,7 @@ class CORE_EXPORT QgsMapLayer : public QObject
 #ifdef SIP_RUN
     SIP_PYOBJECT __repr__();
     % MethodCode
-    QString str = QStringLiteral( "<QgsMapLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider()->name() );
+    QString str = QStringLiteral( "<QgsMapLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider() ? sipCpp->dataProvider()->name() : QStringLiteral( "Invalid" ) );
     sipRes = PyUnicode_FromString( str.toUtf8().constData() );
     % End
 #endif
@@ -1549,7 +1570,7 @@ class CORE_EXPORT QgsMapLayer : public QObject
     //TODO QGIS 4 - move to readXml as a new argument (breaks API)
 
     //! Read flags. It's up to the subclass to respect these when restoring state from XML
-    QgsMapLayer::ReadFlags mReadFlags = nullptr;
+    QgsMapLayer::ReadFlags mReadFlags = QgsMapLayer::ReadFlags();
 
     /**
      * TRUE if the layer's CRS should be validated and invalid CRSes are not permitted.

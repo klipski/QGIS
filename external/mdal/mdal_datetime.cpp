@@ -49,7 +49,7 @@ MDAL::DateTime::DateTime( double value, Epoch epoch ):  mValid( true )
   }
 }
 
-std::string MDAL::DateTime::toStandartCalendarISO8601() const
+std::string MDAL::DateTime::toStandardCalendarISO8601() const
 {
   if ( mValid )
   {
@@ -69,6 +69,23 @@ double MDAL::DateTime::toJulianDay() const
 std::string MDAL::DateTime::toJulianDayString() const
 {
   return std::to_string( toJulianDay() );
+}
+
+std::vector<int> MDAL::DateTime::expandToCalendarArray() const
+{
+  std::vector<int> dateTimeArray( 6, 0 );
+  if ( mValid )
+  {
+    DateTimeValues value = dateTimeGregorianProleptic();
+    dateTimeArray[0] = value.year;
+    dateTimeArray[1] = value.month;
+    dateTimeArray[2] = value.day;
+    dateTimeArray[3] = value.hours;
+    dateTimeArray[4] = value.minutes;
+    dateTimeArray[5] = int( value.seconds + 0.5 );
+  }
+
+  return dateTimeArray;
 }
 
 
@@ -107,6 +124,7 @@ bool MDAL::DateTime::isValid() const { return mValid; }
 MDAL::DateTime::DateTime( int64_t julianTime ): mJulianTime( julianTime ), mValid( true )
 {}
 
+/*
 MDAL::DateTime::DateTimeValues MDAL::DateTime::dateTimeGregorianJulianCalendar() const
 {
   // https://fr.wikipedia.org/wiki/Jour_julien
@@ -147,6 +165,7 @@ MDAL::DateTime::DateTimeValues MDAL::DateTime::dateTimeGregorianJulianCalendar()
 
   return values;
 }
+*/
 
 MDAL::DateTime::DateTimeValues MDAL::DateTime::dateTimeGregorianProleptic() const
 {
@@ -244,16 +263,16 @@ void MDAL::DateTime::setWithGregorianJulianCalendarDate( MDAL::DateTime::DateTim
 
 std::string MDAL::DateTime::toString( MDAL::DateTime::DateTimeValues values ) const
 {
-  int miliseconds = int( ( values.seconds - int( values.seconds ) ) * 1000 + 0.5 );
+  int milliseconds = int( ( values.seconds - int( values.seconds ) ) * 1000 + 0.5 );
   std::string msStr;
-  if ( miliseconds > 0 )
+  if ( milliseconds > 0 )
   {
-    if ( miliseconds < 10 )
-      msStr = prependZero( std::to_string( miliseconds ), 3 );
-    else if ( miliseconds < 100 )
-      msStr = prependZero( std::to_string( miliseconds ), 2 );
-    else if ( miliseconds < 1000 )
-      msStr = std::to_string( miliseconds );
+    if ( milliseconds < 10 )
+      msStr = prependZero( std::to_string( milliseconds ), 3 );
+    else if ( milliseconds < 100 )
+      msStr = prependZero( std::to_string( milliseconds ), 2 );
+    else if ( milliseconds < 1000 )
+      msStr = std::to_string( milliseconds );
 
     msStr = std::string( "," ).append( msStr );
   }

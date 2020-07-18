@@ -139,7 +139,7 @@
        <item>
         <widget class="QGroupBox" name="groupScale">
          <property name="title">
-          <string>Scale range</string>
+          <string>Scale Range</string>
          </property>
          <property name="checkable">
           <bool>true</bool>
@@ -206,7 +206,7 @@
   <tabstop>groupSettings</tabstop>
  </tabstops>
  <resources>
-  <include location="../../images/images.qrc"/>
+  <include location="../../../images/images.qrc"/>
  </resources>
  <connections/>
 </ui>

@@ -94,6 +94,7 @@ QgsColorRampShaderWidget::QgsColorRampShaderWidget( QWidget *parent )
   resetClassifyButton();
 
   connect( mClassificationModeComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsColorRampShaderWidget::classify );
+  connect( mColorInterpolationComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsColorRampShaderWidget::classify );
   connect( mClassifyButton, &QPushButton::clicked, this, &QgsColorRampShaderWidget::classify );
   connect( btnColorRamp, &QgsColorRampButton::colorRampChanged, this, &QgsColorRampShaderWidget::applyColorRamp );
   connect( mNumberOfEntriesSpinBox, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, &QgsColorRampShaderWidget::classify );
@@ -141,7 +142,7 @@ QgsColorRampShader QgsColorRampShaderWidget::shader() const
       continue;
     }
     QgsColorRampShader::ColorRampItem newColorRampItem;
-    newColorRampItem.value = currentItem->text( ValueColumn ).toDouble();
+    newColorRampItem.value = QLocale().toDouble( currentItem->text( ValueColumn ) );
     newColorRampItem.color = currentItem->data( ColorColumn, Qt::EditRole ).value<QColor>();
     newColorRampItem.label = currentItem->text( LabelColumn );
     colorRampItems.append( newColorRampItem );
@@ -180,7 +181,7 @@ void QgsColorRampShaderWidget::autoLabel()
       {
         label = "<= " + currentItem->text( ValueColumn ) + unit;
       }
-      else if ( currentItem->text( ValueColumn ).toDouble() == std::numeric_limits<double>::infinity() )
+      else if ( QLocale().toDouble( currentItem->text( ValueColumn ) ) == std::numeric_limits<double>::infinity() )
       {
         label = "> " + mColormapTreeWidget->topLevelItem( i - 1 )->text( ValueColumn ) + unit;
       }
@@ -265,7 +266,6 @@ void QgsColorRampShaderWidget::setUnitFromLabels()
   }
 }
 
-
 void QgsColorRampShaderWidget::mAddEntryButton_clicked()
 {
   QgsTreeWidgetItemObject *newItem = new QgsTreeWidgetItemObject( mColormapTreeWidget );
@@ -330,13 +330,14 @@ void QgsColorRampShaderWidget::classify()
   for ( ; it != colorRampItemList.end(); ++it )
   {
     QgsTreeWidgetItemObject *newItem = new QgsTreeWidgetItemObject( mColormapTreeWidget );
-    newItem->setText( ValueColumn, QString::number( it->value, 'g', 15 ) );
+    newItem->setText( ValueColumn, QLocale().toString( it->value, 'g', 15 ) );
     newItem->setData( ColorColumn, Qt::EditRole, it->color );
     newItem->setText( LabelColumn, QString() ); // Labels will be populated in autoLabel()
     newItem->setFlags( Qt::ItemIsEnabled | Qt::ItemIsEditable | Qt::ItemIsSelectable );
     connect( newItem, &QgsTreeWidgetItemObject::itemEdited,
              this, &QgsColorRampShaderWidget::mColormapTreeWidget_itemEdited );
   }
+
   mClipCheckBox->setChecked( colorRampShader->clip() );
 
   autoLabel();
@@ -348,7 +349,6 @@ void QgsColorRampShaderWidget::mClassificationModeComboBox_currentIndexChanged( 
   QgsColorRampShader::ClassificationMode mode = static_cast< QgsColorRampShader::ClassificationMode >( mClassificationModeComboBox->itemData( index ).toInt() );
   mNumberOfEntriesSpinBox->setEnabled( mode != QgsColorRampShader::Continuous );
   emit classificationModeChanged( mode );
-
 }
 
 void QgsColorRampShaderWidget::applyColorRamp()
@@ -386,9 +386,9 @@ void QgsColorRampShaderWidget::applyColorRamp()
         continue;
       }
 
-      double value = currentItem->text( ValueColumn ).toDouble();
+      double value = QLocale().toDouble( currentItem->text( ValueColumn ) );
       double position = ( value - mMin ) / ( mMax - mMin );
-      currentItem->setData( ColorColumn, Qt::EditRole, ramp->color( position ) );
+      whileBlocking( static_cast<QgsTreeWidgetItemObject *>( currentItem ) )->setData( ColorColumn, Qt::EditRole, ramp->color( position ) );
     }
 
     emit widgetChanged();
@@ -406,7 +406,7 @@ void QgsColorRampShaderWidget::populateColormapTreeWidget( const QList<QgsColorR
   for ( ; it != colorRampItems.constEnd(); ++it )
   {
     QgsTreeWidgetItemObject *newItem = new QgsTreeWidgetItemObject( mColormapTreeWidget );
-    newItem->setText( ValueColumn, QString::number( it->value, 'g', 15 ) );
+    newItem->setText( ValueColumn, QLocale().toString( it->value, 'g', 15 ) );
     newItem->setData( ColorColumn, Qt::EditRole, it->color );
     newItem->setText( LabelColumn, it->label );
     newItem->setFlags( Qt::ItemIsEnabled | Qt::ItemIsEditable | Qt::ItemIsSelectable );
@@ -414,7 +414,6 @@ void QgsColorRampShaderWidget::populateColormapTreeWidget( const QList<QgsColorR
              this, &QgsColorRampShaderWidget::mColormapTreeWidget_itemEdited );
   }
   setUnitFromLabels();
-  emit widgetChanged();
 }
 
 void QgsColorRampShaderWidget::mLoadFromBandButton_clicked()
@@ -493,7 +492,7 @@ void QgsColorRampShaderWidget::mLoadFromFileButton_clicked()
             inputStringComponents = inputLine.split( ',' );
             if ( inputStringComponents.size() == 6 )
             {
-              QgsColorRampShader::ColorRampItem currentItem( inputStringComponents[0].toDouble(),
+              QgsColorRampShader::ColorRampItem currentItem( QLocale().toDouble( inputStringComponents[0] ),
                   QColor::fromRgb( inputStringComponents[1].toInt(), inputStringComponents[2].toInt(),
                                    inputStringComponents[3].toInt(), inputStringComponents[4].toInt() ),
                   inputStringComponents[5] );
@@ -571,7 +570,7 @@ void QgsColorRampShaderWidget::mExportToFileButton_clicked()
           continue;
         }
         color = currentItem->data( ColorColumn, Qt::EditRole ).value<QColor>();
-        outputStream << currentItem->text( ValueColumn ).toDouble() << ',';
+        outputStream << QLocale().toDouble( currentItem->text( ValueColumn ) ) << ',';
         outputStream << color.red() << ',' << color.green() << ',' << color.blue() << ',' << color.alpha() << ',';
         if ( currentItem->text( LabelColumn ).isEmpty() )
         {
@@ -645,9 +644,20 @@ void QgsColorRampShaderWidget::mColormapTreeWidget_itemEdited( QTreeWidgetItem *
 
 void QgsColorRampShaderWidget::setFromShader( const QgsColorRampShader &colorRampShader )
 {
+  populateColormapTreeWidget( colorRampShader.colorRampItemList() );
+
+  // Those objects are connected to classify() the color ramp shader if they change, or call widget change
+  // need to block them to avoid to classify and to alter the color ramp, or to call duplicate widget change
+  whileBlocking( mClipCheckBox )->setChecked( colorRampShader.clip() );
+  whileBlocking( mColorInterpolationComboBox )->setCurrentIndex( mColorInterpolationComboBox->findData( colorRampShader.colorRampType() ) );
+  mColorInterpolationComboBox_currentIndexChanged( mColorInterpolationComboBox->currentIndex() );
+  whileBlocking( mClassificationModeComboBox )->setCurrentIndex( mClassificationModeComboBox->findData( colorRampShader.classificationMode() ) );
+  mClassificationModeComboBox_currentIndexChanged( mClassificationModeComboBox->currentIndex() );
+  whileBlocking( mNumberOfEntriesSpinBox )->setValue( colorRampShader.colorRampItemList().count() ); // some default
+
   if ( colorRampShader.sourceColorRamp() )
   {
-    btnColorRamp->setColorRamp( colorRampShader.sourceColorRamp() );
+    whileBlocking( btnColorRamp )->setColorRamp( colorRampShader.sourceColorRamp() );
   }
   else
   {
@@ -656,26 +666,7 @@ void QgsColorRampShaderWidget::setFromShader( const QgsColorRampShader &colorRam
     btnColorRamp->setColorRampFromName( defaultPalette );
   }
 
-  mColorInterpolationComboBox->setCurrentIndex( mColorInterpolationComboBox->findData( colorRampShader.colorRampType() ) );
-
-  mColormapTreeWidget->clear();
-  const QList<QgsColorRampShader::ColorRampItem> colorRampItemList = colorRampShader.colorRampItemList();
-  QList<QgsColorRampShader::ColorRampItem>::const_iterator it = colorRampItemList.constBegin();
-  for ( ; it != colorRampItemList.end(); ++it )
-  {
-    QgsTreeWidgetItemObject *newItem = new QgsTreeWidgetItemObject( mColormapTreeWidget );
-    newItem->setText( ValueColumn, QString::number( it->value, 'g', 15 ) );
-    newItem->setData( ColorColumn, Qt::EditRole, it->color );
-    newItem->setText( LabelColumn, it->label );
-    newItem->setFlags( Qt::ItemIsEnabled | Qt::ItemIsEditable | Qt::ItemIsSelectable );
-    connect( newItem, &QgsTreeWidgetItemObject::itemEdited,
-             this, &QgsColorRampShaderWidget::mColormapTreeWidget_itemEdited );
-  }
-  setUnitFromLabels();
-
-  mClipCheckBox->setChecked( colorRampShader.clip() );
-  mClassificationModeComboBox->setCurrentIndex( mClassificationModeComboBox->findData( colorRampShader.classificationMode() ) );
-  mNumberOfEntriesSpinBox->setValue( colorRampShader.colorRampItemList().count() ); // some default
+  emit widgetChanged();
 }
 
 void QgsColorRampShaderWidget::mColorInterpolationComboBox_currentIndexChanged( int index )
@@ -746,9 +737,9 @@ void QgsColorRampShaderWidget::loadMinimumMaximumFromTree()
     return;
   }
 
-  double min = item->text( ValueColumn ).toDouble();
+  double min = QLocale().toDouble( item->text( ValueColumn ) );
   item = mColormapTreeWidget->topLevelItem( mColormapTreeWidget->topLevelItemCount() - 1 );
-  double max = item->text( ValueColumn ).toDouble();
+  double max = QLocale().toDouble( item->text( ValueColumn ) );
 
   if ( !qgsDoubleNear( mMin, min ) || !qgsDoubleNear( mMax, max ) )
   {

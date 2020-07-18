@@ -179,6 +179,8 @@ QgsCategorizedSymbolRenderer::QgsCategorizedSymbolRenderer( const QString &attrN
   }
 }
 
+QgsCategorizedSymbolRenderer::~QgsCategorizedSymbolRenderer() = default;
+
 void QgsCategorizedSymbolRenderer::rebuildHash()
 {
   mSymbolHash.clear();
@@ -1060,7 +1062,8 @@ QgsCategorizedSymbolRenderer *QgsCategorizedSymbolRenderer::convertFromRenderer(
     if ( graduatedSymbolRenderer )
     {
       r.reset( new QgsCategorizedSymbolRenderer( QString(), QgsCategoryList() ) );
-      r->setSourceSymbol( graduatedSymbolRenderer->sourceSymbol()->clone() );
+      if ( graduatedSymbolRenderer->sourceSymbol() )
+        r->setSourceSymbol( graduatedSymbolRenderer->sourceSymbol()->clone() );
       if ( graduatedSymbolRenderer->sourceColorRamp() )
       {
         r->setSourceColorRamp( graduatedSymbolRenderer->sourceColorRamp()->clone() );
@@ -1118,7 +1121,7 @@ int QgsCategorizedSymbolRenderer::matchToSymbols( QgsStyle *style, const QgsSymb
 
   int matched = 0;
   unmatchedSymbols = style->symbolNames();
-  const QSet< QString > allSymbolNames = unmatchedSymbols.toSet();
+  const QSet< QString > allSymbolNames = qgis::listToSet( unmatchedSymbols );
 
   const QRegularExpression tolerantMatchRe( QStringLiteral( "[^\\w\\d ]" ), QRegularExpression::UseUnicodePropertiesOption );
 

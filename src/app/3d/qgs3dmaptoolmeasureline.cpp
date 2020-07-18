@@ -50,7 +50,6 @@ void Qgs3DMapToolMeasureLinePickHandler::handlePickOnVectorLayer( QgsVectorLayer
 Qgs3DMapToolMeasureLine::Qgs3DMapToolMeasureLine( Qgs3DMapCanvas *canvas )
   : Qgs3DMapTool( canvas )
 {
-  connect( mCanvas->scene(), &Qgs3DMapScene::terrainEntityChanged, this, &Qgs3DMapToolMeasureLine::onTerrainEntityChanged );
   mPickHandler.reset( new Qgs3DMapToolMeasureLinePickHandler( this ) );
 
   // Dialog
@@ -59,7 +58,7 @@ Qgs3DMapToolMeasureLine::Qgs3DMapToolMeasureLine( Qgs3DMapCanvas *canvas )
   mDialog->restorePosition();
 
   // Update scale if the terrain vertical scale changed
-  connect( mCanvas->map(), &Qgs3DMapSettings::terrainVerticalScaleChanged, this, &Qgs3DMapToolMeasureLine::updateMeasurementLayer );
+  connect( canvas, &Qgs3DMapCanvas::mapSettingsChanged, this, &Qgs3DMapToolMeasureLine::onMapSettingsChanged );
 }
 
 Qgs3DMapToolMeasureLine::~Qgs3DMapToolMeasureLine() = default;
@@ -89,6 +88,7 @@ void Qgs3DMapToolMeasureLine::activate()
     // Initialize the line layer
     QString mapCRS = mCanvas->map()->crs().authid();
     mMeasurementLayer = new QgsVectorLayer( QStringLiteral( "LineStringZ?crs=" ) + mapCRS, QStringLiteral( "Measurement" ), QStringLiteral( "memory" ) );
+    QgsProject::instance()->addMapLayer( mMeasurementLayer );
 
     // Add feature to layer
     mMeasurementLayer->startEditing();
@@ -99,7 +99,6 @@ void Qgs3DMapToolMeasureLine::activate()
     updateSettings();
     mIsAlreadyActivated = true;
   }
-
   // Show dialog
   mDialog->updateSettings();
   mDialog->show();
@@ -124,6 +123,16 @@ QCursor Qgs3DMapToolMeasureLine::cursor() const
   return Qt::CrossCursor;
 }
 
+void Qgs3DMapToolMeasureLine::onMapSettingsChanged()
+{
+  if ( !mIsAlreadyActivated )
+    return;
+  connect( mCanvas->scene(), &Qgs3DMapScene::terrainEntityChanged, this, &Qgs3DMapToolMeasureLine::onTerrainEntityChanged );
+
+  // Update scale if the terrain vertical scale changed
+  connect( mCanvas->map(), &Qgs3DMapSettings::terrainVerticalScaleChanged, this, &Qgs3DMapToolMeasureLine::updateMeasurementLayer );
+}
+
 void Qgs3DMapToolMeasureLine::onTerrainPicked( Qt3DRender::QPickEvent *event )
 {
   handleClick( event, event->worldIntersection() );
@@ -131,6 +140,8 @@ void Qgs3DMapToolMeasureLine::onTerrainPicked( Qt3DRender::QPickEvent *event )
 
 void Qgs3DMapToolMeasureLine::onTerrainEntityChanged()
 {
+  if ( !mIsAlreadyActivated )
+    return;
   // no need to disconnect from the previous entity: it has been destroyed
   // start listening to the new terrain entity
   if ( QgsTerrainEntity *terrainEntity = mCanvas->scene()->terrainEntity() )
@@ -169,6 +180,8 @@ void Qgs3DMapToolMeasureLine::handleClick( Qt3DRender::QPickEvent *event, const 
 
 void Qgs3DMapToolMeasureLine::updateMeasurementLayer()
 {
+  if ( !mMeasurementLayer )
+    return;
   double verticalScale = canvas()->map()->terrainVerticalScale();
   QgsLineString *line;
   if ( verticalScale != 1.0 )
@@ -194,11 +207,14 @@ void Qgs3DMapToolMeasureLine::updateMeasurementLayer()
   QgsGeometryMap geometryMap;
   geometryMap.insert( 1, lineGeometry );
   mMeasurementLayer->dataProvider()->changeGeometryValues( geometryMap );
+  mMeasurementLayer->reload();
   mCanvas->map()->setRenderers( QList<QgsAbstract3DRenderer *>() << mMeasurementLayer->renderer3D()->clone() );
 }
 
 void Qgs3DMapToolMeasureLine::updateSettings()
 {
+  if ( !mMeasurementLayer )
+    return;
   // Line style
   QgsLine3DSymbol *lineSymbol = new QgsLine3DSymbol;
   lineSymbol->setRenderAsSimpleLines( true );

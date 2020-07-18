@@ -25,6 +25,7 @@ class QgsMessageBar;
 class QgsDockWidget;
 class QgsPanelWidgetStack;
 class QgsTableEditorFormattingWidget;
+class QgsExpressionContextGenerator;
 
 /**
  * \ingroup gui
@@ -53,6 +54,15 @@ class GUI_EXPORT QgsTableEditorDialog : public QMainWindow, private Ui::QgsTable
      * \see tableContents()
      */
     void setTableContents( const QgsTableContents &contents );
+
+    /**
+     * Parses the clipboard text into contents to show in the editor widget.
+     * \returns TRUE if the clipboard was successfully parsed
+     *
+     * \see tableContents()
+     */
+
+    bool setTableContentsFromClipboard();
 
     /**
      * Returns the current contents of the editor widget table.
@@ -97,12 +107,52 @@ class GUI_EXPORT QgsTableEditorDialog : public QMainWindow, private Ui::QgsTable
      */
     void setTableColumnWidth( int column, double width );
 
+    /**
+     * Returns TRUE if the table includes a header row.
+     *
+     * \see setIncludeTableHeader()
+     */
+    bool includeTableHeader() const;
+
+    /**
+     * Sets whether the table includes a header row.
+     *
+     * \see includeTableHeader()
+     */
+    void setIncludeTableHeader( bool included );
+
+    /**
+     * Returns the table header values.
+     *
+     * \see setTableHeaders()
+     */
+    QVariantList tableHeaders() const;
+
+    /**
+     * Sets the table \a headers.
+     *
+     * \see tableHeaders()
+     */
+    void setTableHeaders( const QVariantList &headers );
+
+    /**
+     * Register an expression context generator class that will be used to retrieve
+     * an expression context for the editor when required.
+     * \since QGIS 3.16
+     */
+    void registerExpressionContextGenerator( QgsExpressionContextGenerator *generator );
+
   signals:
 
     /**
      * Emitted whenever the table contents are changed.
      */
     void tableChanged();
+
+    /**
+     * Emitted whenever the "include table header" setting is changed.
+     */
+    void includeHeaderChanged( bool included );
 
   private:
     QgsTableEditorWidget *mTableWidget = nullptr;

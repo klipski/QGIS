@@ -49,6 +49,7 @@ class GUI_EXPORT QgsAttributeEditorContext
       SingleEditMode, //!< Single edit mode, for editing a single feature
       AddFeatureMode, /*!< Add feature mode, for setting attributes for a new feature. In this mode the dialog will be editable even with an invalid feature and
       will add a new feature when the form is accepted. */
+      FixAttributeMode, //!< Fix feature mode, for modifying the feature attributes without saving. The updated feature is available via `feature()` after `save()`
       MultiEditMode, //!< Multi edit mode, for editing fields of multiple features at once
       SearchMode, //!< Form values are used for searching/filtering the layer
       AggregateSearchMode, //!< Form is in aggregate search mode, show each widget in this mode \since QGIS 3.0
@@ -243,6 +244,20 @@ class GUI_EXPORT QgsAttributeEditorContext
     void setFormFeature( const QgsFeature &feature ) { mFormFeature = feature ; }
 
     /**
+     * Returns the feature of the currently edited parent form in its actual state
+     * \see setParentFormFeature()
+     * \since QGIS 3.14
+     */
+    QgsFeature parentFormFeature() const { return mParentFormFeature; }
+
+    /**
+     * Sets the \a feature of the currently edited parent form
+     * \see parentFormFeature()
+     * \since QGIS 3.14
+     */
+    void setParentFormFeature( const QgsFeature &feature ) { mParentFormFeature = feature ; }
+
+    /**
      * Returns current attributeFormMode
      * \since QGIS 3.4
      */
@@ -288,6 +303,8 @@ class GUI_EXPORT QgsAttributeEditorContext
     RelationMode mRelationMode = Undefined;
     //! Store the values of the currently edited form or table row
     QgsFeature mFormFeature;
+    //! Store the values of the currently edited parent form or table row
+    QgsFeature mParentFormFeature;
     FormMode mFormMode = Embed;
     bool mAllowCustomUi = true;
     Mode mAttributeFormMode = SingleEditMode;

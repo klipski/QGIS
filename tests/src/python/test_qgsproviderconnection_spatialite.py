@@ -15,6 +15,7 @@ __revision__ = '$Format:%H$'
 
 import os
 import shutil
+import tempfile
 from test_qgsproviderconnection_base import TestPyQgsProviderConnectionBase
 from qgis.core import (
     QgsWkbTypes,
@@ -43,8 +44,9 @@ class TestPyQgsProviderConnectionSpatialite(unittest.TestCase, TestPyQgsProvider
     def setUpClass(cls):
         """Run before all tests"""
         TestPyQgsProviderConnectionBase.setUpClass()
+        cls.basetestpath = tempfile.mkdtemp()
         spatialite_original_path = '{}/qgis_server/test_project_wms_grouped_layers.sqlite'.format(TEST_DATA_DIR)
-        cls.spatialite_path = '{}/qgis_server/test_project_wms_grouped_layers_test.sqlite'.format(TEST_DATA_DIR)
+        cls.spatialite_path = os.path.join(cls.basetestpath, 'test.sqlite')
         shutil.copy(spatialite_original_path, cls.spatialite_path)
         cls.uri = "dbname=\'%s\'" % cls.spatialite_path
         vl = QgsVectorLayer('{} table=\'cdb_lines\''.format(cls.uri), 'test', 'spatialite')
@@ -107,6 +109,14 @@ class TestPyQgsProviderConnectionSpatialite(unittest.TestCase, TestPyQgsProvider
         table_names = self._table_names(conn.tables('', QgsAbstractDatabaseProviderConnection.Aspatial))
         self.assertFalse('myNewTable' in table_names)
         self.assertTrue('myNewAspatialTable' in table_names)
+
+    def test_gpkg_fields(self):
+        """Test fields"""
+
+        md = QgsProviderRegistry.instance().providerMetadata('spatialite')
+        conn = md.createConnection(self.uri, {})
+        fields = conn.fields('', 'cdb_lines')
+        self.assertEqual(fields.names(), ['pk', 'geom', 'fid', 'id', 'typ', 'name', 'ortsrat', 'id_long'])
 
 
 if __name__ == '__main__':

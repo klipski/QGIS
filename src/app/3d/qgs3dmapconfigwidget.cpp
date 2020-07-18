@@ -40,7 +40,7 @@ Qgs3DMapConfigWidget::Qgs3DMapConfigWidget( Qgs3DMapSettings *map, QgsMapCanvas 
   Q_ASSERT( mainCanvas );
 
   mMeshSymbolWidget = new QgsMesh3dSymbolWidget( nullptr, groupMeshTerrainShading );
-  mMeshSymbolWidget->enableVerticalSetting( false );
+  mMeshSymbolWidget->configureForTerrain();
 
   spinCameraFieldOfView->setClearValue( 45.0 );
   spinTerrainScale->setClearValue( 1.0 );
@@ -53,8 +53,8 @@ Qgs3DMapConfigWidget::Qgs3DMapConfigWidget( Qgs3DMapSettings *map, QgsMapCanvas 
   cboTerrainLayer->setAllowEmptyLayer( true );
   cboTerrainLayer->setFilters( QgsMapLayerProxyModel::RasterLayer );
 
-  cboTerrainType->addItem( tr( "Flat terrain" ), QgsTerrainGenerator::Flat );
-  cboTerrainType->addItem( tr( "DEM (Raster layer)" ), QgsTerrainGenerator::Dem );
+  cboTerrainType->addItem( tr( "Flat Terrain" ), QgsTerrainGenerator::Flat );
+  cboTerrainType->addItem( tr( "DEM (Raster Layer)" ), QgsTerrainGenerator::Dem );
   cboTerrainType->addItem( tr( "Online" ), QgsTerrainGenerator::Online );
   cboTerrainType->addItem( tr( "Mesh" ), QgsTerrainGenerator::Mesh );
 
@@ -83,7 +83,7 @@ Qgs3DMapConfigWidget::Qgs3DMapConfigWidget( Qgs3DMapSettings *map, QgsMapCanvas 
     cboTerrainLayer->setLayer( meshTerrain->meshLayer() );
     mMeshSymbolWidget->setLayer( meshTerrain->meshLayer(), false );
     mMeshSymbolWidget->setSymbol( meshTerrain->symbol() );
-    spinTerrainScale->setValue( meshTerrain->symbol().verticaleScale() );
+    spinTerrainScale->setValue( meshTerrain->symbol().verticalScale() );
   }
   else
   {
@@ -102,20 +102,14 @@ Qgs3DMapConfigWidget::Qgs3DMapConfigWidget( Qgs3DMapSettings *map, QgsMapCanvas 
   chkShowTileInfo->setChecked( mMap->showTerrainTilesInfo() );
   chkShowBoundingBoxes->setChecked( mMap->showTerrainBoundingBoxes() );
   chkShowCameraViewCenter->setChecked( mMap->showCameraViewCenter() );
+  chkShowLightSourceOrigins->setChecked( mMap->showLightSourceOrigins() );
 
   groupTerrainShading->setChecked( mMap->isTerrainShadingEnabled() );
   widgetTerrainMaterial->setDiffuseVisible( false );
   widgetTerrainMaterial->setMaterial( mMap->terrainShadingMaterial() );
 
-  // populate combo box with map themes
-  const QStringList mapThemeNames = QgsProject::instance()->mapThemeCollection()->mapThemes();
-  cboTerrainMapTheme->addItem( tr( "(none)" ) );  // item for no map theme
-  for ( QString themeName : mapThemeNames )
-    cboTerrainMapTheme->addItem( themeName );
-
-  cboTerrainMapTheme->setCurrentText( mMap->terrainMapTheme() );
-
   widgetLights->setPointLights( mMap->pointLights() );
+  widgetLights->setDirectionalLights( mMap->directionalLights() );
 
   connect( cboTerrainType, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &Qgs3DMapConfigWidget::onTerrainTypeChanged );
   connect( cboTerrainLayer, static_cast<void ( QComboBox::* )( int )>( &QgsMapLayerComboBox::currentIndexChanged ), this, &Qgs3DMapConfigWidget::onTerrainLayerChanged );
@@ -201,7 +195,7 @@ void Qgs3DMapConfigWidget::apply()
       QgsMeshTerrainGenerator *newTerrainGenerator = new QgsMeshTerrainGenerator;
       newTerrainGenerator->setLayer( meshLayer );
       QgsMesh3DSymbol symbol = mMeshSymbolWidget->symbol();
-      symbol.setVerticaleScale( spinTerrainScale->value() );
+      symbol.setVerticalScale( spinTerrainScale->value() );
       newTerrainGenerator->setSymbol( symbol );
       mMap->setTerrainGenerator( newTerrainGenerator );
       needsUpdateOrigin = true;
@@ -229,13 +223,12 @@ void Qgs3DMapConfigWidget::apply()
   mMap->setShowTerrainTilesInfo( chkShowTileInfo->isChecked() );
   mMap->setShowTerrainBoundingBoxes( chkShowBoundingBoxes->isChecked() );
   mMap->setShowCameraViewCenter( chkShowCameraViewCenter->isChecked() );
-
+  mMap->setShowLightSourceOrigins( chkShowLightSourceOrigins->isChecked() );
   mMap->setTerrainShadingEnabled( groupTerrainShading->isChecked() );
   mMap->setTerrainShadingMaterial( widgetTerrainMaterial->material() );
 
-  mMap->setTerrainMapTheme( cboTerrainMapTheme->currentText() );
-
   mMap->setPointLights( widgetLights->pointLights() );
+  mMap->setDirectionalLights( widgetLights->directionalLights() );
 }
 
 void Qgs3DMapConfigWidget::onTerrainTypeChanged()
@@ -249,8 +242,6 @@ void Qgs3DMapConfigWidget::onTerrainTypeChanged()
   labelTerrainLayer->setVisible( genType == QgsTerrainGenerator::Dem || genType == QgsTerrainGenerator::Mesh );
   cboTerrainLayer->setVisible( genType == QgsTerrainGenerator::Dem || genType == QgsTerrainGenerator::Mesh );
   groupMeshTerrainShading->setVisible( genType == QgsTerrainGenerator::Mesh );
-  labelTerrainMapTheme->setVisible( !( genType == QgsTerrainGenerator::Mesh ) );
-  cboTerrainMapTheme->setVisible( !( genType == QgsTerrainGenerator::Mesh ) );
 
   QgsMapLayer *oldTerrainLayer = cboTerrainLayer->currentLayer();
   if ( cboTerrainType->currentData() == QgsTerrainGenerator::Dem )

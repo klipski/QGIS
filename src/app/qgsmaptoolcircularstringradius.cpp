@@ -33,7 +33,7 @@ QgsMapToolCircularStringRadius::QgsMapToolCircularStringRadius( QgsMapToolCaptur
   , mRadius( 0.0 )
 
 {
-
+  mToolName = tr( "Add circular string by radius" );
 }
 
 void QgsMapToolCircularStringRadius::deactivate()
@@ -45,6 +45,15 @@ void QgsMapToolCircularStringRadius::deactivate()
 void QgsMapToolCircularStringRadius::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
 {
   QgsPoint point = mapPoint( *e );
+
+  if ( !currentVectorLayer() )
+  {
+    notifyNotVectorLayer();
+    clean();
+    stopCapturing();
+    e->ignore();
+    return;
+  }
 
   if ( e->button() == Qt::LeftButton )
   {
@@ -86,11 +95,7 @@ void QgsMapToolCircularStringRadius::cadCanvasReleaseEvent( QgsMapMouseEvent *e 
   {
     if ( !( mPoints.size() % 2 ) )
       mPoints.removeLast();
-    deactivate();
-    if ( mParentTool )
-    {
-      mParentTool->canvasReleaseEvent( e );
-    }
+    release( e );
   }
 }
 

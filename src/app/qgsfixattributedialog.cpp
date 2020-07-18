@@ -16,23 +16,23 @@
 
 #include "qgsattributeform.h"
 #include "qgsapplication.h"
+#include "qgisapp.h"
 
 #include <QtWidgets/QPushButton>
 
-QgsFixAttributeDialog::QgsFixAttributeDialog( QgsVectorLayer *vl, QgsFeatureList &features, QWidget *parent )
+
+QgsFixAttributeDialog::QgsFixAttributeDialog( QgsVectorLayer *vl, QgsFeatureList &features, QWidget *parent, const QgsAttributeEditorContext &context )
   : QDialog( parent )
   , mFeatures( features )
 {
-  init( vl );
+  init( vl, context );
 }
 
-void QgsFixAttributeDialog::init( QgsVectorLayer *layer )
+void QgsFixAttributeDialog::init( QgsVectorLayer *layer, const QgsAttributeEditorContext &context )
 {
-  QgsAttributeEditorContext context;
   setWindowTitle( tr( "%1 - Fix Pasted Features" ).arg( layer->name() ) );
   setLayout( new QGridLayout() );
   layout()->setMargin( 0 );
-  context.setFormMode( QgsAttributeEditorContext::StandaloneDialog );
 
   mUnfixedFeatures = mFeatures;
   mCurrentFeature = mFeatures.begin();
@@ -52,7 +52,7 @@ void QgsFixAttributeDialog::init( QgsVectorLayer *layer )
   infoLayout->addWidget( mProgressBar );
   QgsFeature feature;
   mAttributeForm = new QgsAttributeForm( layer, *mCurrentFeature, context, this );
-  mAttributeForm->setMode( QgsAttributeEditorContext::SingleEditMode );
+  mAttributeForm->setMode( QgsAttributeEditorContext::FixAttributeMode );
   mAttributeForm->disconnectButtonBox();
   layout()->addWidget( mAttributeForm );
 

@@ -21,6 +21,7 @@
 #include "qgslayouttablecolumn.h"
 #include "qgsnumericformat.h"
 #include "qgsxmlutils.h"
+#include "qgsexpressioncontextutils.h"
 
 //
 // QgsLayoutItemManualTable
@@ -31,6 +32,10 @@ QgsLayoutItemManualTable::QgsLayoutItemManualTable( QgsLayout *layout )
 {
   setHeaderMode( NoHeaders );
   refreshAttributes();
+}
+
+QgsLayoutItemManualTable::~QgsLayoutItemManualTable()
+{
 }
 
 int QgsLayoutItemManualTable::type() const
@@ -59,18 +64,30 @@ bool QgsLayoutItemManualTable::getTableContents( QgsLayoutTableContents &content
 
   QgsNumericFormatContext numericContext;
 
+  QgsExpressionContext context = createExpressionContext();
+
+  int rowNumber = 0;
   for ( const QgsTableRow &row : qgis::as_const( mContents ) )
   {
     QgsLayoutTableRow currentRow;
 
-    for ( int i = 0; i < mColumns.count(); ++i )
+    for ( int columnNumber = 0; columnNumber < mColumns.count(); ++columnNumber )
     {
-      if ( i < row.count() )
+      if ( columnNumber < row.count() )
       {
-        if ( row.at( i ).numericFormat() )
-          currentRow << row.at( i ).numericFormat()->formatDouble( row.at( i ).content().toDouble(), numericContext );
+        QVariant cellContent = row.at( columnNumber ).content();
+
+        if ( cellContent.canConvert< QgsProperty >() )
+        {
+          // expression based cell content, evaluate now
+          QgsExpressionContextScopePopper popper( context, scopeForCell( rowNumber, columnNumber ) );
+          cellContent = cellContent.value< QgsProperty >().value( context );
+        }
+
+        if ( row.at( columnNumber ).numericFormat() )
+          currentRow << row.at( columnNumber ).numericFormat()->formatDouble( cellContent.toDouble(), numericContext );
         else
-          currentRow << row.at( i ).content().toString();
+          currentRow << cellContent.toString();
       }
       else
       {
@@ -78,6 +95,7 @@ bool QgsLayoutItemManualTable::getTableContents( QgsLayoutTableContents &content
       }
     }
     contents << currentRow;
+    rowNumber++;
   }
 
   recalculateTableSize();
@@ -131,10 +149,53 @@ void QgsLayoutItemManualTable::setColumnWidths( const QList<double> &widths )
   refreshAttributes();
 }
 
+bool QgsLayoutItemManualTable::includeTableHeader() const
+{
+  return mIncludeHeader;
+}
+
+void QgsLayoutItemManualTable::setIncludeTableHeader( bool included )
+{
+  mIncludeHeader = included;
+
+  if ( !mIncludeHeader )
+    setHeaderMode( NoHeaders );
+  else
+    setHeaderMode( AllFrames );
+  refreshColumns();
+  refreshAttributes();
+}
+
+QgsLayoutTableColumns &QgsLayoutItemManualTable::headers()
+{
+  return mHeaders;
+}
+
+void QgsLayoutItemManualTable::setHeaders( const QgsLayoutTableColumns &headers )
+{
+  mHeaders.clear();
+
+  mHeaders.append( headers );
+  refreshColumns();
+  refreshAttributes();
+}
+
 bool QgsLayoutItemManualTable::writePropertiesToElement( QDomElement &tableElem, QDomDocument &doc, const QgsReadWriteContext &context ) const
 {
   if ( !QgsLayoutTable::writePropertiesToElement( tableElem, doc, context ) )
     return false;
+
+  tableElem.setAttribute( QStringLiteral( "includeHeader" ), mIncludeHeader ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+
+  //headers
+  QDomElement headersElem = doc.createElement( QStringLiteral( "headers" ) );
+  for ( const QgsLayoutTableColumn &header : qgis::as_const( mHeaders ) )
+  {
+    QDomElement headerElem = doc.createElement( QStringLiteral( "header" ) );
+    header.writeXml( headerElem, doc );
+    headersElem.appendChild( headerElem );
+  }
+  tableElem.appendChild( headersElem );
 
   QDomElement contentsElement = doc.createElement( QStringLiteral( "contents" ) );
   for ( const QgsTableRow &row : mContents )
@@ -176,6 +237,23 @@ bool QgsLayoutItemManualTable::readPropertiesFromElement( const QDomElement &ite
 {
   if ( !QgsLayoutTable::readPropertiesFromElement( itemElem, doc, context ) )
     return false;
+
+  mIncludeHeader = itemElem.attribute( QStringLiteral( "includeHeader" ) ).toInt();
+  //restore header specifications
+  mHeaders.clear();
+  QDomNodeList headersList = itemElem.elementsByTagName( QStringLiteral( "headers" ) );
+  if ( !headersList.isEmpty() )
+  {
+    QDomElement headersElem = headersList.at( 0 ).toElement();
+    QDomNodeList headerEntryList = headersElem.elementsByTagName( QStringLiteral( "header" ) );
+    for ( int i = 0; i < headerEntryList.size(); ++i )
+    {
+      QDomElement headerElem = headerEntryList.at( i ).toElement();
+      QgsLayoutTableColumn header;
+      header.readXml( headerElem );
+      mHeaders.append( header );
+    }
+  }
 
   mRowHeights.clear();
   const QDomNodeList rowHeightNodeList = itemElem.firstChildElement( QStringLiteral( "rowHeights" ) ).childNodes();
@@ -240,6 +318,36 @@ bool QgsLayoutItemManualTable::calculateMaxRowHeights()
   return true;
 }
 
+QgsTextFormat QgsLayoutItemManualTable::textFormatForHeader( int column ) const
+{
+//  if ( mHeaders.value( column ).)
+  return QgsLayoutTable::textFormatForHeader( column );
+}
+
+QgsTextFormat QgsLayoutItemManualTable::textFormatForCell( int row, int column ) const
+{
+  if ( mContents.value( row ).value( column ).textFormat().isValid() )
+    return mContents.value( row ).value( column ).textFormat();
+
+  return QgsLayoutTable::textFormatForCell( row, column );
+}
+
+Qt::Alignment QgsLayoutItemManualTable::horizontalAlignmentForCell( int row, int column ) const
+{
+  if ( row < mContents.size() && column < mContents.at( row ).size() )
+    return mContents.value( row ).value( column ).horizontalAlignment();
+
+  return QgsLayoutTable::horizontalAlignmentForCell( row, column );
+}
+
+Qt::Alignment QgsLayoutItemManualTable::verticalAlignmentForCell( int row, int column ) const
+{
+  if ( row < mContents.size() && column < mContents.at( row ).size() )
+    return mContents.value( row ).value( column ).verticalAlignment();
+
+  return QgsLayoutTable::verticalAlignmentForCell( row, column );
+}
+
 void QgsLayoutItemManualTable::refreshColumns()
 {
   // refresh columns
@@ -252,9 +360,9 @@ void QgsLayoutItemManualTable::refreshColumns()
     for ( const QgsTableCell &cell : firstRow )
     {
       ( void )cell;
-      std::unique_ptr< QgsLayoutTableColumn > newCol = qgis::make_unique< QgsLayoutTableColumn >( QString() );
-      newCol->setWidth( mColumnWidths.value( colIndex ) );
-      columns << newCol.release();
+      QgsLayoutTableColumn newCol( mHeaders.value( colIndex ).heading() );
+      newCol.setWidth( mColumnWidths.value( colIndex ) );
+      columns << newCol;
       colIndex++;
     }
   }

@@ -107,6 +107,9 @@ class QgsMssqlSchemaItem : public QgsDataCollectionItem
     QgsMssqlLayerItem *addLayer( const QgsMssqlLayerProperty &layerProperty, bool refresh );
     void refresh() override {} // do not refresh directly
     void addLayers( QgsDataItem *newLayers );
+
+  public:
+    bool layerCollection() const override;
 };
 
 class QgsMssqlLayerItem : public QgsLayerItem
@@ -124,16 +127,23 @@ class QgsMssqlLayerItem : public QgsLayerItem
 
     const QgsMssqlLayerProperty &layerInfo() const { return mLayerProperty; }
 
+    QVector<QgsDataItem *> createChildren() override;
+
   private:
     QgsMssqlLayerProperty mLayerProperty;
     bool mDisableInvalidGeometryHandling = false;
+
 };
+
+
 
 //! Provider for GDAL root data item
 class QgsMssqlDataItemProvider : public QgsDataItemProvider
 {
   public:
     QString name() override;
+
+    QString dataProviderKey() const override;
 
     int capabilities() const override;
 

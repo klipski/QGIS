@@ -39,7 +39,8 @@
 QgsAttributeTableView::QgsAttributeTableView( QWidget *parent )
   : QTableView( parent )
 {
-  QgsGui::instance()->enableAutoGeometryRestore( this );
+  QgsSettings settings;
+  restoreGeometry( settings.value( QStringLiteral( "BetterAttributeTable/geometry" ) ).toByteArray() );
 
   //verticalHeader()->setDefaultSectionSize( 20 );
   horizontalHeader()->setHighlightSections( false );
@@ -54,6 +55,8 @@ QgsAttributeTableView::QgsAttributeTableView( QWidget *parent )
   setSelectionMode( QAbstractItemView::ExtendedSelection );
   setSortingEnabled( true ); // At this point no data is in the model yet, so actually nothing is sorted.
   horizontalHeader()->setSortIndicatorShown( false ); // So hide the indicator to avoid confusion.
+
+  setHorizontalScrollMode( QAbstractItemView::ScrollPerPixel );
 
   verticalHeader()->viewport()->installEventFilter( this );
 
@@ -105,6 +108,8 @@ void QgsAttributeTableView::setAttributeTableConfig( const QgsAttributeTableConf
     i++;
   }
   mConfig = config;
+  if ( config.sortExpression().isEmpty() )
+    horizontalHeader()->setSortIndicatorShown( false );
 }
 
 QList<QgsFeatureId> QgsAttributeTableView::selectedFeaturesIds() const
@@ -234,7 +239,7 @@ QWidget *QgsAttributeTableView::createActionWidget( QgsFeatureId fid )
     action->setData( "map_layer_action" );
     action->setToolTip( mapLayerAction->text() );
     action->setProperty( "fid", fid );
-    action->setProperty( "action", qVariantFromValue( qobject_cast<QObject *>( mapLayerAction ) ) );
+    action->setProperty( "action", QVariant::fromValue( qobject_cast<QObject *>( mapLayerAction ) ) );
     connect( action, &QAction::triggered, this, &QgsAttributeTableView::actionTriggered );
     actionList << action;
 
@@ -283,6 +288,8 @@ QWidget *QgsAttributeTableView::createActionWidget( QgsFeatureId fid )
 void QgsAttributeTableView::closeEvent( QCloseEvent *e )
 {
   Q_UNUSED( e )
+  QgsSettings settings;
+  settings.setValue( QStringLiteral( "BetterAttributeTable/geometry" ), QVariant( saveGeometry() ) );
 }
 
 void QgsAttributeTableView::mousePressEvent( QMouseEvent *event )
@@ -354,7 +361,7 @@ void QgsAttributeTableView::contextMenuEvent( QContextMenuEvent *event )
   delete mActionPopup;
   mActionPopup = nullptr;
 
-  QModelIndex idx = indexAt( event->pos() );
+  const QModelIndex idx = mFilterModel->mapToMaster( indexAt( event->pos() ) );
   if ( !idx.isValid() )
   {
     return;
@@ -366,7 +373,9 @@ void QgsAttributeTableView::contextMenuEvent( QContextMenuEvent *event )
 
   mActionPopup = new QMenu( this );
 
-  mActionPopup->addAction( tr( "Select All" ), this, SLOT( selectAll() ), QKeySequence::SelectAll );
+  QAction *selectAllAction = mActionPopup->addAction( tr( "Select All" ) );
+  selectAllAction->setShortcut( QKeySequence::SelectAll );
+  connect( selectAllAction, &QAction::triggered, this, &QgsAttributeTableView::selectAll );
 
   // let some other parts of the application add some actions
   emit willShowContextMenu( mActionPopup, idx );

@@ -22,9 +22,9 @@
 #include "qgis_sip.h"
 #include "qgsabstractgeometry.h"
 #include "qgsrectangle.h"
+#include <QPainterPath>
 
 class QgsLineString;
-class QPainterPath;
 
 /**
  * \ingroup core
@@ -89,6 +89,7 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry
      * Adds a curve to a painter path.
      */
     virtual void addToPainterPath( QPainterPath &path ) const = 0;
+    QPainterPath asQPainterPath() const override;
 
     /**
      * Draws the curve as a polygon on the specified QPainter.

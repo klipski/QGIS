@@ -20,6 +20,7 @@
 
 #include "qgis_gui.h"
 #include "qgstablecell.h"
+#include "qgsproperty.h"
 #include <QTableWidget>
 #include <QPlainTextEdit>
 #include <QStyledItemDelegate>
@@ -183,6 +184,45 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
     QColor selectionBackgroundColor();
 
     /**
+     * Returns the horizontal alignment for the currently selected cells.
+     *
+     * If the returned value contains both horizontal and vertical alignment flags, then
+     * the selected cells have a mix of different horizontal alignments.
+     *
+     * \see selectionVerticalAlignment()
+     */
+    Qt::Alignment selectionHorizontalAlignment();
+
+    /**
+     * Returns the horizontal alignment for the currently selected cells.
+     *
+     * If the returned value contains both horizontal and vertical alignment flags, then
+     * the selected cells have a mix of different vertical alignments.
+     *
+     * \see selectionVerticalAlignment()
+     */
+    Qt::Alignment selectionVerticalAlignment();
+
+    /**
+     * Returns the QgsProperty used for the contents of the currently selected cells.
+     *
+     * If the returned value is a default constructed QgsProperty, then the selected
+     * cells have a mix of different properties.
+     *
+     * \since QGIS 3.16
+     */
+    QgsProperty selectionCellProperty();
+
+    /**
+     * Returns the text format for the currently selected cells.
+     *
+     * Returns an invalid QgsTextFormat if the selection has mixed text format.
+     *
+     * \since QGIS 3.16
+     */
+    QgsTextFormat selectionTextFormat();
+
+    /**
      * Returns the height (in millimeters) of the rows associated with the current selection,
      * or 0 if an automatic row height is desired, or -1 if the selection has mixed row heights.
      *
@@ -243,6 +283,18 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
      * \see rowsAssociatedWithSelection()
      */
     QList<int> columnsAssociatedWithSelection();
+
+    /**
+     * Returns the table header values.
+     *
+     * \see setTableHeaders()
+     */
+    QVariantList tableHeaders() const;
+
+    /**
+     * Returns TRUE if any header cells are selected.
+     */
+    bool isHeaderCellSelected();
 
   public slots:
 
@@ -324,6 +376,40 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
     void setSelectionBackgroundColor( const QColor &color );
 
     /**
+     * Sets the horizontal alignment for the currently selected cells.
+     *
+     * \see selectionHorizontalAlignment()
+     * \see setSelectionVerticalAlignment()
+     *
+     * \since QGIS 3.16
+     */
+    void setSelectionHorizontalAlignment( Qt::Alignment alignment );
+
+    /**
+     * Sets the vertical alignment for the currently selected cells.
+     *
+     * \see selectionVerticalAlignment()
+     * \see setSelectionHorizontalAlignment()
+     *
+     * \since QGIS 3.16
+     */
+    void setSelectionVerticalAlignment( Qt::Alignment alignment );
+
+    /**
+     * Sets the cell contents QgsProperty for the currently selected cells.
+     *
+     * \since QGIS 3.16
+     */
+    void setSelectionCellProperty( const QgsProperty &property );
+
+    /**
+     * Sets the text \a format for the selected cells.
+     *
+     * \since QGIS 3.16
+     */
+    void setSelectionTextFormat( const QgsTextFormat &format );
+
+    /**
      * Sets the row \a height (in millimeters) for the currently selected rows, or 0 for automatic row height.
      *
      * \see setSelectionColumnWidth()
@@ -336,6 +422,20 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
      * \see setSelectionRowHeight()
      */
     void setSelectionColumnWidth( double height );
+
+    /**
+     * Sets whether the table includes a header row.
+     *
+     * \see includeTableHeader()
+     */
+    void setIncludeTableHeader( bool included );
+
+    /**
+     * Sets the table \a headers.
+     *
+     * \see tableHeaders()
+     */
+    void setTableHeaders( const QVariantList &headers );
 
   protected:
     void keyPressEvent( QKeyEvent *event ) override;
@@ -364,7 +464,11 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
       PresetBackgroundColorRole = Qt::UserRole + 1,
       RowHeight,
       ColumnWidth,
-      CellContent
+      CellContent,
+      TextFormat,
+      HorizontalAlignment,
+      VerticalAlignment,
+      CellProperty,
     };
 
     void updateHeaders();
@@ -377,6 +481,8 @@ class GUI_EXPORT QgsTableEditorWidget : public QTableWidget
     int mBlockSignals = 0;
     QHash< QTableWidgetItem *, QgsNumericFormat * > mNumericFormats;
     QMenu *mHeaderMenu = nullptr;
+    bool mIncludeHeader = false;
+    bool mFirstSet = true;
 
     friend class QgsTableEditorDelegate;
 

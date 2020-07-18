@@ -47,6 +47,7 @@ Q_GLOBAL_STATIC_WITH_ARGS( PalPropertyList, palHiddenProperties, (
   QgsPalLayerSettings::Strikeout,
   QgsPalLayerSettings::MultiLineAlignment,
   QgsPalLayerSettings::BufferSize,
+  QgsPalLayerSettings::BufferDraw,
   QgsPalLayerSettings::BufferColor,
   QgsPalLayerSettings::LabelDistance,
   QgsPalLayerSettings::Hali,
@@ -78,7 +79,7 @@ QgsAuxiliaryLayer::QgsAuxiliaryLayer( const QString &pkField, const QString &fil
   mJoinInfo.setEditable( true );
   mJoinInfo.setUpsertOnEdit( true );
   mJoinInfo.setCascadedDelete( true );
-  mJoinInfo.setJoinFieldNamesBlackList( QStringList() << QStringLiteral( "rowid" ) ); // introduced by ogr provider
+  mJoinInfo.setJoinFieldNamesBlockList( QStringList() << QStringLiteral( "rowid" ) ); // introduced by ogr provider
 }
 
 QgsAuxiliaryLayer *QgsAuxiliaryLayer::clone( QgsVectorLayer *target ) const

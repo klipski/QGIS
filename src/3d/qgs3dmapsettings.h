@@ -27,6 +27,7 @@
 #include "qgsmesh3dsymbol.h"
 #include "qgsphongmaterialsettings.h"
 #include "qgspointlightsettings.h"
+#include "qgsdirectionallightsettings.h"
 #include "qgsterraingenerator.h"
 #include "qgsvector3d.h"
 
@@ -48,7 +49,7 @@ class QDomElement;
  *
  * \since QGIS 3.0
  */
-class _3D_EXPORT Qgs3DMapSettings : public QObject
+class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObject
 {
     Q_OBJECT
   public:
@@ -58,6 +59,8 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
     //! Copy constructor
     Qgs3DMapSettings( const Qgs3DMapSettings &other );
     ~Qgs3DMapSettings() override;
+
+    Qgs3DMapSettings &operator=( Qgs3DMapSettings const & ) = delete;
 
     //! Reads configuration from a DOM element previously written by writeXml()
     void readXml( const QDomElement &elem, const QgsReadWriteContext &context );
@@ -221,9 +224,9 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
      * Sets terrain generator. It takes care of producing terrain tiles from the input data.
      * Takes ownership of the generator
      */
-    void setTerrainGenerator( QgsTerrainGenerator *gen SIP_TRANSFER );
+    void setTerrainGenerator( QgsTerrainGenerator *gen SIP_TRANSFER ) SIP_SKIP;
     //! Returns terrain generator. It takes care of producing terrain tiles from the input data.
-    QgsTerrainGenerator *terrainGenerator() const { return mTerrainGenerator.get(); }
+    QgsTerrainGenerator *terrainGenerator() const SIP_SKIP { return mTerrainGenerator.get(); }
 
     /**
      * Sets whether terrain shading is enabled.
@@ -312,6 +315,19 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
      * \since QGIS 3.4
      */
     bool showCameraViewCenter() const { return mShowCameraViewCenter; }
+
+    /**
+     * Sets whether to show light source origins as a sphere (for debugging)
+     * \since QGIS 3.16
+     */
+    void setShowLightSourceOrigins( bool enabled );
+
+    /**
+     * Returns whether to show light source origins as a sphere (for debugging)
+     * \since QGIS 3.16
+     */
+    bool showLightSourceOrigins() const { return mShowLightSources; }
+
     //! Sets whether to display labels on terrain tiles
     void setShowLabels( bool enabled );
     //! Returns whether to display labels on terrain tiles
@@ -324,10 +340,22 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
     QList<QgsPointLightSettings> pointLights() const { return mPointLights; }
 
     /**
+     * Returns list of directional lights defined in the scene
+     * \since QGIS 3.16
+     */
+    QList<QgsDirectionalLightSettings> directionalLights() const { return mDirectionalLights; }
+
+    /**
      * Sets list of point lights defined in the scene
      * \since QGIS 3.6
      */
     void setPointLights( const QList<QgsPointLightSettings> &pointLights );
+
+    /**
+     * Sets list of directional lights defined in the scene
+     * \since QGIS 3.16
+     */
+    void setDirectionalLights( const QList<QgsDirectionalLightSettings> &directionalLights );
 
     /**
      * Returns the camera lens' field of view
@@ -402,6 +430,13 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
      * \since QGIS 3.4
      */
     void showCameraViewCenterChanged();
+
+    /**
+     * Emitted when the flag whether light source origins are shown has changed.
+     * \since QGIS 3.15
+     */
+    void showLightSourceOriginsChanged();
+
     //! Emitted when the flag whether labels are displayed on terrain tiles has changed
     void showLabelsChanged();
 
@@ -412,10 +447,21 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
     void pointLightsChanged();
 
     /**
+     * Emitted when the list of directional lights changes
+     * \since QGIS 3.16
+     */
+    void directionalLightsChanged();
+
+    /**
      * Emitted when the camera lens field of view changes
      * \since QGIS 3.8
      */
     void fieldOfViewChanged();
+
+  private:
+#ifdef SIP_RUN
+    Qgs3DMapSettings &operator=( const Qgs3DMapSettings & );
+#endif
 
   private:
     //! Offset in map CRS coordinates at which our 3D world has origin (0,0,0)
@@ -434,8 +480,10 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject
     bool mShowTerrainBoundingBoxes = false;  //!< Whether to show bounding boxes of entities - useful for debugging
     bool mShowTerrainTileInfo = false;  //!< Whether to draw extra information about terrain tiles to the textures - useful for debugging
     bool mShowCameraViewCenter = false;  //!< Whether to show camera view center as a sphere - useful for debugging
+    bool mShowLightSources = false; //!< Whether to show the origin of light sources
     bool mShowLabels = false; //!< Whether to display labels on terrain tiles
-    QList<QgsPointLightSettings> mPointLights;  //!< List of lights defined for the scene
+    QList<QgsPointLightSettings> mPointLights;  //!< List of point lights defined for the scene
+    QList<QgsDirectionalLightSettings> mDirectionalLights;  //!< List of directional lights defined for the scene
     float mFieldOfView = 45.0f; //<! Camera lens field of view value
     QList<QgsMapLayerRef> mLayers;   //!< Layers to be rendered
     QList<QgsAbstract3DRenderer *> mRenderers;  //!< Extra stuff to render as 3D object

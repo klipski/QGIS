@@ -43,6 +43,7 @@
 #include "qgsanimatedicon.h"
 #include "qgsproject.h"
 #include "qgsvectorlayer.h"
+#include "qgsprovidermetadata.h"
 
 // use GDAL VSI mechanism
 #define CPL_SUPRESS_CPLUSPLUS  //#spellok
@@ -80,6 +81,11 @@ QIcon QgsLayerItem::iconMesh()
   return QgsApplication::getThemeIcon( QStringLiteral( "/mIconMeshLayer.svg" ) );
 }
 
+QIcon QgsLayerItem::iconVectorTile()
+{
+  return QgsApplication::getThemeIcon( QStringLiteral( "/mIconVectorTileLayer.svg" ) );
+}
+
 QIcon QgsLayerItem::iconDefault()
 {
   return QgsApplication::getThemeIcon( QStringLiteral( "/mIconLayer.png" ) );
@@ -103,6 +109,125 @@ QIcon QgsDataCollectionItem::homeDirIcon()
 QIcon QgsDataCollectionItem::iconDir()
 {
   return QgsApplication::getThemeIcon( QStringLiteral( "/mIconFolder.svg" ) );
+}
+
+
+QgsFieldsItem::QgsFieldsItem( QgsDataItem *parent,
+                              const QString &path,
+                              const QString &connectionUri,
+                              const QString &providerKey,
+                              const QString &schema,
+                              const QString &tableName )
+  : QgsDataItem( QgsDataItem::Fields, parent, tr( "Fields" ), path, providerKey )
+  , mSchema( schema )
+  , mTableName( tableName )
+  , mConnectionUri( connectionUri )
+{
+  mCapabilities |= ( Fertile | Collapse );
+}
+
+QgsFieldsItem::~QgsFieldsItem()
+{
+
+}
+
+QVector<QgsDataItem *> QgsFieldsItem::createChildren()
+{
+  QVector<QgsDataItem *> children;
+  try
+  {
+    QgsProviderMetadata *md { QgsProviderRegistry::instance()->providerMetadata( providerKey() ) };
+    if ( md )
+    {
+      std::unique_ptr<QgsAbstractDatabaseProviderConnection> conn { static_cast<QgsAbstractDatabaseProviderConnection *>( md->createConnection( mConnectionUri, {} ) ) };
+      if ( conn )
+      {
+        int i = 0;
+        const QgsFields constFields { conn->fields( mSchema, mTableName ) };
+        for ( const auto &f : constFields )
+        {
+          QgsFieldItem *fieldItem { new QgsFieldItem( this, f ) };
+          fieldItem->setSortKey( i++ );
+          children.push_back( fieldItem );
+        }
+      }
+    }
+  }
+  catch ( const QgsProviderConnectionException &ex )
+  {
+    children.push_back( new QgsErrorItem( this, ex.what(), path() + QStringLiteral( "/error" ) ) );
+  }
+  return children;
+}
+
+QIcon QgsFieldsItem::icon()
+{
+  return QgsApplication::getThemeIcon( QStringLiteral( "mSourceFields.svg" ) );
+}
+
+QString QgsFieldsItem::connectionUri() const
+{
+  return mConnectionUri;
+}
+
+QgsVectorLayer *QgsFieldsItem::layer()
+{
+  std::unique_ptr<QgsVectorLayer> vl;
+  QgsProviderMetadata *md { QgsProviderRegistry::instance()->providerMetadata( providerKey() ) };
+  if ( md )
+  {
+    try
+    {
+      std::unique_ptr<QgsAbstractDatabaseProviderConnection> conn { static_cast<QgsAbstractDatabaseProviderConnection *>( md->createConnection( mConnectionUri, {} ) ) };
+      if ( conn )
+      {
+        vl.reset( new QgsVectorLayer( conn->tableUri( mSchema, mTableName ), QStringLiteral( "temp_layer" ), providerKey() ) );
+        if ( vl->isValid() )
+        {
+          return vl.release();
+        }
+      }
+    }
+    catch ( const QgsProviderConnectionException &ex )
+    {
+      // This should never happen!
+      QgsDebugMsg( QStringLiteral( "Error getting connection from %1" ).arg( mConnectionUri ) );
+    }
+  }
+  else
+  {
+    // This should never happen!
+    QgsDebugMsg( QStringLiteral( "Error getting metadata for provider %1" ).arg( providerKey() ) );
+  }
+  return nullptr;
+}
+
+QString QgsFieldsItem::tableName() const
+{
+  return mTableName;
+}
+
+QString QgsFieldsItem::schema() const
+{
+  return mSchema;
+}
+
+QgsFieldItem::QgsFieldItem( QgsDataItem *parent, const QgsField &field )
+  : QgsDataItem( QgsDataItem::Type::Field, parent, field.name(), parent->path() + '/' + field.name(), parent->providerKey() )
+  , mField( field )
+{
+  // Precondition
+  Q_ASSERT( static_cast<QgsFieldsItem *>( parent ) );
+  setState( QgsDataItem::State::Populated );
+}
+
+QgsFieldItem::~QgsFieldItem()
+{
+}
+
+QIcon QgsFieldItem::icon()
+{
+  return QgsFields::iconForFieldType( mField.type() );
 }
 
 QIcon QgsFavoritesItem::iconFavorites()
@@ -379,17 +504,18 @@ void QgsDataItem::refresh()
   }
 }
 
-void QgsDataItem::refreshConnections()
+void QgsDataItem::refreshConnections( const QString &key )
 {
   // Walk up until the root node is reached
   if ( mParent )
   {
-    mParent->refreshConnections();
+    mParent->refreshConnections( key );
   }
   else
   {
-    refresh();
-    emit connectionsChanged();
+    // if a specific key was specified then we use that -- otherwise we assume the connections
+    // changed belong to the same provider as this item
+    emit connectionsChanged( key.isEmpty() ? providerKey() : key );
   }
 }
 
@@ -457,6 +583,11 @@ int QgsDataItem::rowCount()
 bool QgsDataItem::hasChildren()
 {
   return ( state() == Populated ? !mChildren.isEmpty() : true );
+}
+
+bool QgsDataItem::layerCollection() const
+{
+  return false;
 }
 
 void QgsDataItem::setParent( QgsDataItem *parent )
@@ -638,6 +769,9 @@ QgsMapLayerType QgsLayerItem::mapLayerType() const
     case QgsLayerItem::Mesh:
       return QgsMapLayerType::MeshLayer;
 
+    case QgsLayerItem::VectorTile:
+      return QgsMapLayerType::VectorTileLayer;
+
     case QgsLayerItem::Plugin:
       return QgsMapLayerType::PluginLayer;
 
@@ -688,6 +822,8 @@ QgsLayerItem::LayerType QgsLayerItem::typeFromMapLayer( QgsMapLayer *layer )
       return Plugin;
     case QgsMapLayerType::MeshLayer:
       return Mesh;
+    case QgsMapLayerType::VectorTileLayer:
+      return VectorTile;
   }
   return Vector; // no warnings
 }
@@ -773,6 +909,7 @@ QgsMimeDataUtils::Uri QgsLayerItem::mimeUri() const
         case Raster:
         case Plugin:
         case Mesh:
+        case VectorTile:
           break;
       }
       break;
@@ -781,6 +918,9 @@ QgsMimeDataUtils::Uri QgsLayerItem::mimeUri() const
       break;
     case QgsMapLayerType::MeshLayer:
       u.layerType = QStringLiteral( "mesh" );
+      break;
+    case QgsMapLayerType::VectorTileLayer:
+      u.layerType = QStringLiteral( "vector-tile" );
       break;
     case QgsMapLayerType::PluginLayer:
       u.layerType = QStringLiteral( "plugin" );
@@ -1113,11 +1253,11 @@ QgsDirectoryParamWidget::QgsDirectoryParamWidget( const QString &path, QWidget *
     QString size;
     if ( fi.size() > 1024 )
     {
-      size = size.sprintf( "%.1f KiB", fi.size() / 1024.0 );
+      size = QStringLiteral( "%1 KiB" ).arg( QString::number( fi.size() / 1024.0, 'f', 1 ) );
     }
     else if ( fi.size() > 1.048576e6 )
     {
-      size = size.sprintf( "%.1f MiB", fi.size() / 1.048576e6 );
+      size = QStringLiteral( "%1 MiB" ).arg( QString::number( fi.size() / 1.048576e6, 'f', 1 ) );
     }
     else
     {

@@ -28,6 +28,7 @@
 #include "qgssettings.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsgui.h"
+#include "qgshelp.h"
 
 #include <QColorDialog>
 #include <QFontDatabase>
@@ -46,9 +47,11 @@ QgsLabelPropertyDialog::QgsLabelPropertyDialog( const QString &layerId, const QS
   mLabelAllPartsCheckBox->setChecked( layerSettings.labelPerPart );
 
   connect( buttonBox, &QDialogButtonBox::clicked, this, &QgsLabelPropertyDialog::buttonBox_clicked );
+  connect( buttonBox, &QDialogButtonBox::helpRequested, this, &QgsLabelPropertyDialog::showHelp );
   connect( mShowLabelChkbx, &QCheckBox::toggled, this, &QgsLabelPropertyDialog::mShowLabelChkbx_toggled );
   connect( mAlwaysShowChkbx, &QCheckBox::toggled, this, &QgsLabelPropertyDialog::mAlwaysShowChkbx_toggled );
   connect( mShowCalloutChkbx, &QCheckBox::toggled, this, &QgsLabelPropertyDialog::showCalloutToggled );
+  connect( mBufferDrawChkbx, &QCheckBox::toggled, this, &QgsLabelPropertyDialog::bufferDrawToggled );
   connect( mLabelDistanceSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLabelPropertyDialog::mLabelDistanceSpinBox_valueChanged );
   connect( mXCoordSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLabelPropertyDialog::mXCoordSpinBox_valueChanged );
   connect( mYCoordSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLabelPropertyDialog::mYCoordSpinBox_valueChanged );
@@ -200,6 +203,9 @@ void QgsLabelPropertyDialog::init( const QString &layerId, const QString &provid
     case QgsPalLayerSettings::MultiRight:
       defaultMultilineAlign = QStringLiteral( "right" );
       break;
+    case QgsPalLayerSettings::MultiJustify:
+      defaultMultilineAlign = QStringLiteral( "justify" );
+      break;
     case QgsPalLayerSettings::MultiFollowPlacement:
       defaultMultilineAlign = QStringLiteral( "follow label placement" );
       break;
@@ -241,6 +247,7 @@ void QgsLabelPropertyDialog::disableGuiElements()
   mBufferSizeSpinBox->setEnabled( false );
   mFontColorButton->setEnabled( false );
   mBufferColorButton->setEnabled( false );
+  mBufferDrawChkbx->setEnabled( false );
   mLabelDistanceSpinBox->setEnabled( false );
   mXCoordSpinBox->setEnabled( false );
   mYCoordSpinBox->setEnabled( false );
@@ -268,6 +275,7 @@ void QgsLabelPropertyDialog::blockElementSignals( bool block )
   mBufferSizeSpinBox->blockSignals( block );
   mFontColorButton->blockSignals( block );
   mBufferColorButton->blockSignals( block );
+  mBufferDrawChkbx->blockSignals( block );
   mLabelDistanceSpinBox->blockSignals( block );
   mXCoordSpinBox->blockSignals( block );
   mYCoordSpinBox->blockSignals( block );
@@ -393,6 +401,11 @@ void QgsLabelPropertyDialog::setDataDefinedValues( QgsVectorLayer *vlayer )
       case QgsPalLayerSettings::BufferColor:
         mBufferColorButton->setColor( QColor( result.toString() ) );
         break;
+
+      case QgsPalLayerSettings::BufferDraw:
+        mBufferDrawChkbx->setChecked( result.toBool() );
+        break;
+
       case QgsPalLayerSettings::Color:
         mFontColorButton->setColor( QColor( result.toString() ) );
         break;
@@ -493,6 +506,9 @@ void QgsLabelPropertyDialog::enableDataDefinedWidgets( QgsVectorLayer *vlayer )
       case QgsPalLayerSettings::BufferColor:
         mBufferColorButton->setEnabled( true );
         break;
+      case QgsPalLayerSettings::BufferDraw:
+        mBufferDrawChkbx->setEnabled( true );
+        break;
       case QgsPalLayerSettings::Color:
         mFontColorButton->setEnabled( true );
         break;
@@ -575,10 +591,11 @@ void QgsLabelPropertyDialog::populateFontStyleComboBox()
 
 void QgsLabelPropertyDialog::fillMultiLineAlignComboBox()
 {
-  mMultiLineAlignComboBox->addItem( tr( "Layer default" ), "" );
+  mMultiLineAlignComboBox->addItem( tr( "Layer Default" ), "" );
   mMultiLineAlignComboBox->addItem( tr( "Left" ), "Left" );
   mMultiLineAlignComboBox->addItem( tr( "Center" ), "Center" );
   mMultiLineAlignComboBox->addItem( tr( "Right" ), "Right" );
+  mMultiLineAlignComboBox->addItem( tr( "Justify" ), "Justify" );
 }
 
 void QgsLabelPropertyDialog::fillHaliComboBox()
@@ -615,6 +632,11 @@ void QgsLabelPropertyDialog::labelAllPartsToggled( bool checked )
 void QgsLabelPropertyDialog::showCalloutToggled( bool chkd )
 {
   insertChangedValue( QgsPalLayerSettings::CalloutDraw, ( chkd ? 1 : 0 ) );
+}
+
+void QgsLabelPropertyDialog::bufferDrawToggled( bool chkd )
+{
+  insertChangedValue( QgsPalLayerSettings::BufferDraw, ( chkd ? 1 : 0 ) );
 }
 
 void QgsLabelPropertyDialog::minScaleChanged( double scale )
@@ -801,4 +823,9 @@ void QgsLabelPropertyDialog::enableWidgetsForPinnedLabels()
     mHaliComboBox->setToolTip( QString() );
     mValiComboBox->setToolTip( QString() );
   }
+}
+
+void QgsLabelPropertyDialog::showHelp()
+{
+  QgsHelp::openHelp( QStringLiteral( "working_with_vector/vector_properties.html#the-label-toolbar" ) );
 }

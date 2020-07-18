@@ -193,6 +193,16 @@ void QgsTableEditorWidget::updateHeaders()
   }
 
   setHorizontalHeaderLabels( headers );
+
+  headers.clear();
+  if ( mIncludeHeader )
+    headers << tr( "Header" );
+  for ( int i = 1; i <= 1000; i++ )
+  {
+    headers << QString::number( i );
+  }
+
+  setVerticalHeaderLabels( headers );
 }
 
 bool QgsTableEditorWidget::collectConsecutiveRowRange( const QModelIndexList &list, int &minRow, int &maxRow ) const
@@ -296,21 +306,33 @@ void QgsTableEditorWidget::setTableContents( const QgsTableContents &contents )
   mNumericFormats.clear();
 
   QgsNumericFormatContext numericContext;
-  int rowNumber = 0;
-  setRowCount( contents.size() );
+  int rowNumber = mIncludeHeader ? 1 : 0;
+  bool first = true;
+  setRowCount( contents.size() + rowNumber );
   for ( const QgsTableRow &row : contents )
   {
-    if ( rowNumber == 0 )
+    if ( first )
+    {
       setColumnCount( row.size() );
+      first = false;
+    }
 
     int colNumber = 0;
     for ( const QgsTableCell &col : row )
     {
-      QTableWidgetItem *item = new QTableWidgetItem( col.content().toString() );
+      QTableWidgetItem *item = new QTableWidgetItem( col.content().value< QgsProperty >().isActive() ? col.content().value< QgsProperty >().asExpression() : col.content().toString() );
       item->setData( CellContent, col.content() ); // can't use EditRole, because Qt. (https://bugreports.qt.io/browse/QTBUG-11549)
       item->setData( Qt::BackgroundRole, col.backgroundColor().isValid() ? col.backgroundColor() : QColor( 255, 255, 255 ) );
       item->setData( PresetBackgroundColorRole, col.backgroundColor().isValid() ? col.backgroundColor() : QVariant() );
       item->setData( Qt::ForegroundRole, col.foregroundColor().isValid() ? col.foregroundColor() : QVariant() );
+      item->setData( TextFormat, QVariant::fromValue( col.textFormat() ) );
+      item->setData( HorizontalAlignment, static_cast< int >( col.horizontalAlignment() ) );
+      item->setData( VerticalAlignment, static_cast< int >( col.verticalAlignment() ) );
+      item->setData( CellProperty, QVariant::fromValue( col.content().value< QgsProperty >() ) );
+
+      if ( col.content().value< QgsProperty >().isActive() )
+        item->setFlags( item->flags() & ( ~Qt::ItemIsEditable ) );
+
       if ( col.numericFormat() )
       {
         mNumericFormats.insert( item, col.numericFormat()->clone() );
@@ -324,6 +346,13 @@ void QgsTableEditorWidget::setTableContents( const QgsTableContents &contents )
 
   mBlockSignals--;
   updateHeaders();
+
+  if ( mFirstSet )
+  {
+    resizeColumnsToContents();
+    resizeRowsToContents();
+    mFirstSet = false;
+  }
   emit tableChanged();
 }
 
@@ -332,7 +361,7 @@ QgsTableContents QgsTableEditorWidget::tableContents() const
   QgsTableContents items;
   items.reserve( rowCount() );
 
-  for ( int r = 0; r < rowCount(); r++ )
+  for ( int r = mIncludeHeader ? 1 : 0; r < rowCount(); r++ )
   {
     QgsTableRow row;
     row.reserve( columnCount() );
@@ -341,9 +370,12 @@ QgsTableContents QgsTableEditorWidget::tableContents() const
       QgsTableCell cell;
       if ( QTableWidgetItem *i = item( r, c ) )
       {
-        cell.setContent( i->data( CellContent ) );
+        cell.setContent( i->data( CellProperty ).value< QgsProperty >().isActive() ? i->data( CellProperty ) : i->data( CellContent ) );
         cell.setBackgroundColor( i->data( PresetBackgroundColorRole ).value< QColor >() );
         cell.setForegroundColor( i->data( Qt::ForegroundRole ).value< QColor >() );
+        cell.setTextFormat( i->data( TextFormat ).value< QgsTextFormat >() );
+        cell.setHorizontalAlignment( static_cast< Qt::Alignment >( i->data( HorizontalAlignment ).toInt() ) );
+        cell.setVerticalAlignment( static_cast< Qt::Alignment >( i->data( VerticalAlignment ).toInt() ) );
 
         if ( mNumericFormats.value( i ) )
         {
@@ -367,6 +399,9 @@ void QgsTableEditorWidget::setSelectionNumericFormat( QgsNumericFormat *format )
   QgsNumericFormatContext numericContext;
   for ( const QModelIndex &index : selection )
   {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
     QTableWidgetItem *i = item( index.row(), index.column() );
     if ( !i )
     {
@@ -503,6 +538,99 @@ QColor QgsTableEditorWidget::selectionBackgroundColor()
   return c;
 }
 
+Qt::Alignment QgsTableEditorWidget::selectionHorizontalAlignment()
+{
+  Qt::Alignment alignment = Qt::AlignLeft;
+  bool first = true;
+  const QModelIndexList selection = selectedIndexes();
+  for ( const QModelIndex &index : selection )
+  {
+    Qt::Alignment cellAlign = static_cast< Qt::Alignment >( model()->data( index, HorizontalAlignment ).toInt() );
+    if ( first )
+    {
+      alignment = cellAlign;
+      first = false;
+    }
+    else if ( cellAlign == alignment )
+      continue;
+    else
+    {
+      return Qt::AlignLeft | Qt::AlignTop;
+    }
+  }
+  return alignment;
+}
+
+Qt::Alignment QgsTableEditorWidget::selectionVerticalAlignment()
+{
+  Qt::Alignment alignment = Qt::AlignVCenter;
+  bool first = true;
+  const QModelIndexList selection = selectedIndexes();
+  for ( const QModelIndex &index : selection )
+  {
+    Qt::Alignment cellAlign = static_cast< Qt::Alignment >( model()->data( index, VerticalAlignment ).toInt() );
+    if ( first )
+    {
+      alignment = cellAlign;
+      first = false;
+    }
+    else if ( cellAlign == alignment )
+      continue;
+    else
+    {
+      return Qt::AlignLeft | Qt::AlignTop;
+    }
+  }
+  return alignment;
+}
+
+QgsProperty QgsTableEditorWidget::selectionCellProperty()
+{
+  QgsProperty property;
+  bool first = true;
+  const QModelIndexList selection = selectedIndexes();
+  for ( const QModelIndex &index : selection )
+  {
+    const QgsProperty cellProperty = model()->data( index, CellProperty ).value< QgsProperty >();
+    if ( first )
+    {
+      property = cellProperty;
+      first = false;
+    }
+    else if ( cellProperty == property )
+      continue;
+    else
+    {
+      return QgsProperty();
+    }
+  }
+  return property;
+}
+
+QgsTextFormat QgsTableEditorWidget::selectionTextFormat()
+{
+  QgsTextFormat format;
+  bool first = true;
+  const QModelIndexList selection = selectedIndexes();
+  for ( const QModelIndex &index : selection )
+  {
+    if ( !model()->data( index, TextFormat ).isValid() )
+      return QgsTextFormat();
+
+    QgsTextFormat cellFormat = model()->data( index, TextFormat ).value< QgsTextFormat >();
+    if ( first )
+    {
+      format = cellFormat;
+      first = false;
+    }
+    else if ( cellFormat == format )
+      continue;
+    else
+      return QgsTextFormat();
+  }
+  return format;
+}
+
 double QgsTableEditorWidget::selectionRowHeight()
 {
   double height = 0;
@@ -546,7 +674,7 @@ double QgsTableEditorWidget::tableRowHeight( int row )
   double height = 0;
   for ( int col = 0; col < columnCount(); ++col )
   {
-    double thisHeight = model()->data( model()->index( row, col ), RowHeight ).toDouble();
+    double thisHeight = model()->data( model()->index( row + ( mIncludeHeader ? 1 : 0 ), col ), RowHeight ).toDouble();
     height = std::max( thisHeight, height );
   }
   return height;
@@ -565,12 +693,15 @@ double QgsTableEditorWidget::tableColumnWidth( int column )
 
 void QgsTableEditorWidget::setTableRowHeight( int row, double height )
 {
+  if ( row == 0 && mIncludeHeader )
+    return;
+
   bool changed = false;
   mBlockSignals++;
 
   for ( int col = 0; col < columnCount(); ++col )
   {
-    if ( QTableWidgetItem *i = item( row, col ) )
+    if ( QTableWidgetItem *i = item( row + ( mIncludeHeader ? 1 : 0 ), col ) )
     {
       if ( i->data( RowHeight ).toDouble() != height )
       {
@@ -582,7 +713,7 @@ void QgsTableEditorWidget::setTableRowHeight( int row, double height )
     {
       QTableWidgetItem *newItem = new QTableWidgetItem();
       newItem->setData( RowHeight, height );
-      setItem( row, col, newItem );
+      setItem( row + ( mIncludeHeader ? 1 : 0 ), col, newItem );
       changed = true;
     }
   }
@@ -627,6 +758,35 @@ QList<int> QgsTableEditorWidget::rowsAssociatedWithSelection()
 QList<int> QgsTableEditorWidget::columnsAssociatedWithSelection()
 {
   return collectUniqueColumns( selectedIndexes() );
+}
+
+QVariantList QgsTableEditorWidget::tableHeaders() const
+{
+  if ( !mIncludeHeader )
+    return QVariantList();
+
+  QVariantList res;
+  res.reserve( columnCount() );
+  for ( int col = 0; col < columnCount(); ++col )
+  {
+    if ( QTableWidgetItem *i = item( 0, col ) )
+    {
+      res << i->data( CellContent );
+    }
+    else
+    {
+      res << QVariant();
+    }
+  }
+  return res;
+}
+
+bool QgsTableEditorWidget::isHeaderCellSelected()
+{
+  if ( !mIncludeHeader )
+    return false;
+
+  return collectUniqueRows( selectedIndexes() ).contains( 0 );
 }
 
 void QgsTableEditorWidget::insertRowsBelow()
@@ -795,6 +955,9 @@ void QgsTableEditorWidget::setSelectionForegroundColor( const QColor &color )
   mBlockSignals++;
   for ( const QModelIndex &index : selection )
   {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
     if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
     {
       if ( i->data( Qt::ForegroundRole ).value< QColor >() != color )
@@ -823,6 +986,9 @@ void QgsTableEditorWidget::setSelectionBackgroundColor( const QColor &color )
   mBlockSignals++;
   for ( const QModelIndex &index : selection )
   {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
     if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
     {
       if ( i->data( PresetBackgroundColorRole ).value< QColor >() != color )
@@ -846,6 +1012,147 @@ void QgsTableEditorWidget::setSelectionBackgroundColor( const QColor &color )
     emit tableChanged();
 }
 
+void QgsTableEditorWidget::setSelectionHorizontalAlignment( Qt::Alignment alignment )
+{
+  const QModelIndexList selection = selectedIndexes();
+  bool changed = false;
+  mBlockSignals++;
+  for ( const QModelIndex &index : selection )
+  {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
+    if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
+    {
+      if ( static_cast< Qt::Alignment >( i->data( HorizontalAlignment ).toInt() ) != alignment )
+      {
+        i->setData( HorizontalAlignment, static_cast< int >( alignment ) );
+        changed = true;
+      }
+    }
+    else
+    {
+      QTableWidgetItem *newItem = new QTableWidgetItem();
+      newItem->setData( HorizontalAlignment, static_cast< int >( alignment ) );
+      setItem( index.row(), index.column(), newItem );
+      changed = true;
+    }
+  }
+  mBlockSignals--;
+  if ( changed && !mBlockSignals )
+    emit tableChanged();
+}
+
+void QgsTableEditorWidget::setSelectionVerticalAlignment( Qt::Alignment alignment )
+{
+  const QModelIndexList selection = selectedIndexes();
+  bool changed = false;
+  mBlockSignals++;
+  for ( const QModelIndex &index : selection )
+  {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
+    if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
+    {
+      if ( static_cast< Qt::Alignment >( i->data( HorizontalAlignment ).toInt() ) != alignment )
+      {
+        i->setData( VerticalAlignment, static_cast< int >( alignment ) );
+        changed = true;
+      }
+    }
+    else
+    {
+      QTableWidgetItem *newItem = new QTableWidgetItem();
+      newItem->setData( VerticalAlignment, static_cast< int >( alignment ) );
+      setItem( index.row(), index.column(), newItem );
+      changed = true;
+    }
+  }
+  mBlockSignals--;
+  if ( changed && !mBlockSignals )
+    emit tableChanged();
+}
+
+void QgsTableEditorWidget::setSelectionCellProperty( const QgsProperty &property )
+{
+  const QModelIndexList selection = selectedIndexes();
+  bool changed = false;
+  mBlockSignals++;
+  for ( const QModelIndex &index : selection )
+  {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
+    if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
+    {
+      if ( i->data( CellProperty ).value< QgsProperty >() != property )
+      {
+        if ( property.isActive() )
+        {
+          i->setData( CellProperty, QVariant::fromValue( property ) );
+          i->setText( property.asExpression() );
+          i->setFlags( i->flags() & ( ~Qt::ItemIsEditable ) );
+        }
+        else
+        {
+          i->setData( CellProperty, QVariant() );
+          i->setText( QString() );
+          i->setFlags( i->flags() | Qt::ItemIsEditable );
+        }
+        changed = true;
+      }
+    }
+    else
+    {
+      QTableWidgetItem *newItem = new QTableWidgetItem( property.asExpression() );
+      if ( property.isActive() )
+      {
+        newItem->setData( CellProperty,  QVariant::fromValue( property ) );
+        newItem->setFlags( newItem->flags() & ( ~Qt::ItemIsEditable ) );
+      }
+      else
+      {
+        newItem->setData( CellProperty, QVariant() );
+        newItem->setFlags( newItem->flags() | Qt::ItemIsEditable );
+      }
+      setItem( index.row(), index.column(), newItem );
+      changed = true;
+    }
+  }
+  mBlockSignals--;
+  if ( changed && !mBlockSignals )
+    emit tableChanged();
+}
+
+void QgsTableEditorWidget::setSelectionTextFormat( const QgsTextFormat &format )
+{
+  const QModelIndexList selection = selectedIndexes();
+  bool changed = false;
+  mBlockSignals++;
+  for ( const QModelIndex &index : selection )
+  {
+    if ( index.row() == 0 && mIncludeHeader )
+      continue;
+
+    if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
+    {
+      i->setData( TextFormat, QVariant::fromValue( format ) );
+      changed = true;
+    }
+    else
+    {
+      QTableWidgetItem *newItem = new QTableWidgetItem();
+      newItem->setData( TextFormat, QVariant::fromValue( format ) );
+      setItem( index.row(), index.column(), newItem );
+      changed = true;
+    }
+  }
+  mBlockSignals--;
+  if ( changed && !mBlockSignals )
+    emit tableChanged();
+}
+
 void QgsTableEditorWidget::setSelectionRowHeight( double height )
 {
   bool changed = false;
@@ -853,6 +1160,9 @@ void QgsTableEditorWidget::setSelectionRowHeight( double height )
   const QList< int > rows = rowsAssociatedWithSelection();
   for ( int row : rows )
   {
+    if ( row == 0 && mIncludeHeader )
+      continue;
+
     for ( int col = 0; col < columnCount(); ++col )
     {
       if ( QTableWidgetItem *i = item( row, col ) )
@@ -906,6 +1216,44 @@ void QgsTableEditorWidget::setSelectionColumnWidth( double width )
   mBlockSignals--;
   if ( changed && !mBlockSignals )
     emit tableChanged();
+}
+
+void QgsTableEditorWidget::setIncludeTableHeader( bool included )
+{
+  if ( included == mIncludeHeader )
+    return;
+
+  mIncludeHeader = included;
+
+  if ( mIncludeHeader )
+    insertRow( 0 );
+  else
+    removeRow( 0 );
+  updateHeaders();
+}
+
+void QgsTableEditorWidget::setTableHeaders( const QVariantList &headers )
+{
+  if ( !mIncludeHeader )
+    return;
+
+  mBlockSignals++;
+
+  for ( int col = 0; col < columnCount(); ++col )
+  {
+    if ( QTableWidgetItem *i = item( 0, col ) )
+    {
+      i->setText( headers.value( col ).toString() );
+      i->setData( CellContent, headers.value( col ) ); // can't use EditRole, because Qt. (https://bugreports.qt.io/browse/QTBUG-11549)
+    }
+    else
+    {
+      QTableWidgetItem *item = new QTableWidgetItem( headers.value( col ).toString() );
+      item->setData( CellContent, headers.value( col ) ); // can't use EditRole, because Qt. (https://bugreports.qt.io/browse/QTBUG-11549)
+      setItem( 0, col, item );
+    }
+  }
+  mBlockSignals--;
 }
 
 /// @cond PRIVATE
@@ -1082,7 +1430,7 @@ void QgsTableEditorDelegate::setModelData( QWidget *editor, QAbstractItemModel *
   if ( QgsTableEditorTextEdit *lineEdit = qobject_cast<QgsTableEditorTextEdit * >( editor ) )
   {
     const QString text = lineEdit->toPlainText();
-    if ( text != model->data( index, QgsTableEditorWidget::CellContent ).toString() )
+    if ( text != model->data( index, QgsTableEditorWidget::CellContent ).toString() && !model->data( index, QgsTableEditorWidget::CellProperty ).value< QgsProperty >().isActive() )
     {
       model->setData( index, text, QgsTableEditorWidget::CellContent );
       model->setData( index, text, Qt::DisplayRole );

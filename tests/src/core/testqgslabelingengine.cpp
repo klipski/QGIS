@@ -28,6 +28,8 @@
 #include "qgsmultirenderchecker.h"
 #include "qgsfontutils.h"
 #include "qgsnullsymbolrenderer.h"
+#include "qgssinglesymbolrenderer.h"
+#include "qgssymbol.h"
 #include "pointset.h"
 
 class TestQgsLabelingEngine : public QObject
@@ -79,6 +81,8 @@ class TestQgsLabelingEngine : public QObject
     void testRotationBasedOrientationLine();
     void testMapUnitLetterSpacing();
     void testMapUnitWordSpacing();
+    void testReferencedFields();
+    void testClipping();
 
   private:
     QgsVectorLayer *vl = nullptr;
@@ -751,7 +755,7 @@ void TestQgsLabelingEngine::testParticipatingLayers()
   QgsPalLayerSettings settings2;
   QgsVectorLayerLabelProvider *provider2 = new QgsVectorLayerLabelProvider( layer2, QStringLiteral( "test2" ), true, &settings2 );
   engine.addProvider( provider2 );
-  QCOMPARE( engine.participatingLayers().toSet(), QSet< QgsMapLayer * >() << vl << layer2 );
+  QCOMPARE( qgis::listToSet( engine.participatingLayers() ), QSet< QgsMapLayer * >() << vl << layer2 );
 
   // add a rule-based labeling node
   QgsRuleBasedLabeling::Rule *root = new QgsRuleBasedLabeling::Rule( nullptr );
@@ -763,7 +767,7 @@ void TestQgsLabelingEngine::testParticipatingLayers()
   QgsVectorLayer *layer3 = new QgsVectorLayer( QStringLiteral( "Point?field=col1:integer" ), QStringLiteral( "layer3" ), QStringLiteral( "memory" ) );
   QgsRuleBasedLabelProvider *ruleProvider = new QgsRuleBasedLabelProvider( QgsRuleBasedLabeling( root ), layer3 );
   engine.addProvider( ruleProvider );
-  QCOMPARE( engine.participatingLayers().toSet(), QSet< QgsMapLayer * >() << vl << layer2 << layer3 );
+  QCOMPARE( qgis::listToSet( engine.participatingLayers() ), QSet< QgsMapLayer * >() << vl << layer2 << layer3 );
 }
 
 bool TestQgsLabelingEngine::imageCheck( const QString &testName, QImage &image, int mismatchCount )
@@ -1936,190 +1940,231 @@ void TestQgsLabelingEngine::labelingResults()
 void TestQgsLabelingEngine::pointsetExtend()
 {
   // test extending pointsets by distance
-  QVector< double > x;
-  x << 1 << 9;
-  QVector< double > y;
-  y << 2 << 2;
-  pal::PointSet set( 2, x.data(), y.data() );
+  {
+    QVector< double > x;
+    x << 1 << 9;
+    QVector< double > y;
+    y << 2 << 2;
+    pal::PointSet set( 2, x.data(), y.data() );
 
-  set.extendLineByDistance( 1, 3, 0 );
-  QCOMPARE( set.getNumPoints(), 4 );
-  QCOMPARE( set.x.at( 0 ), 0.0 );
-  QCOMPARE( set.y.at( 0 ), 2.0 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 9.0 );
-  QCOMPARE( set.y.at( 2 ), 2.0 );
-  QCOMPARE( set.x.at( 3 ), 12.0 );
-  QCOMPARE( set.y.at( 3 ), 2.0 );
+    set.extendLineByDistance( 1, 3, 0 );
+    QCOMPARE( set.getNumPoints(), 4 );
+    QCOMPARE( set.x.at( 0 ), 0.0 );
+    QCOMPARE( set.y.at( 0 ), 2.0 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 9.0 );
+    QCOMPARE( set.y.at( 2 ), 2.0 );
+    QCOMPARE( set.x.at( 3 ), 12.0 );
+    QCOMPARE( set.y.at( 3 ), 2.0 );
+  }
 
-  x.clear();
-  x << 1 << 9;
-  y.clear();
-  y << 2 << 2;
-  set = pal::PointSet( 2, x.data(), y.data() );
-  set.extendLineByDistance( 0, 0, 0 );
-  QCOMPARE( set.getNumPoints(), 2 );
-  QCOMPARE( set.x.at( 0 ), 1.0 );
-  QCOMPARE( set.y.at( 0 ), 2.0 );
-  QCOMPARE( set.x.at( 1 ), 9.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
+  {
+    QVector< double > x;
+    x << 1 << 9;
+    QVector< double > y;
+    y << 2 << 2;
+    pal::PointSet set( 2, x.data(), y.data() );
+    set.extendLineByDistance( 0, 0, 0 );
+    QCOMPARE( set.getNumPoints(), 2 );
+    QCOMPARE( set.x.at( 0 ), 1.0 );
+    QCOMPARE( set.y.at( 0 ), 2.0 );
+    QCOMPARE( set.x.at( 1 ), 9.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+  }
 
-  set = pal::PointSet( 0, nullptr, nullptr );
-  set.extendLineByDistance( 1, 3, 0 );
-  QCOMPARE( set.getNumPoints(), 0 );
+  {
+    pal::PointSet set( 0, nullptr, nullptr );
+    set.extendLineByDistance( 1, 3, 0 );
+    QCOMPARE( set.getNumPoints(), 0 );
+  }
 
-  x.clear();
-  x << 1;
-  y.clear();
-  y << 2;
-  set = pal::PointSet( 1, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 0 );
-  QCOMPARE( set.getNumPoints(), 1 );
+  {
+    QVector< double > x;
+    x << 1;
+    QVector< double > y;
+    y << 2;
+    pal::PointSet set( 1, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 0 );
+    QCOMPARE( set.getNumPoints(), 1 );
+  }
 
-  x.clear();
-  x << 1 << 2 << 8 << 9;
-  y.clear();
-  y << 2 << 3 << 3 << 2;
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 0 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.121320, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), -0.121320, 0.00001 );
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 0 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.121320, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), -0.121320, 0.00001 );
+  }
 
-  x.clear();
-  x << 9 << 8 << 2 << 1;
-  y.clear();
-  y << 2 << 3 << 3 << 2;
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 0 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 9.707107, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 9.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 8.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 2.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 1.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), -1.121320, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), -0.121320, 0.00001 );
+  {
+    QVector< double > x;
+    x << 9 << 8 << 2 << 1;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 0 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 9.707107, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 9.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 8.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 2.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 1.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), -1.121320, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), -0.121320, 0.00001 );
+  }
 
-  // with averaging
-  x.clear();
-  x << 1 << 2 << 8 << 9;
-  y.clear();
-  y << 2 << 3 << 3 << 2;
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 0.5 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.573264, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), 0.457821, 0.00001 );
-  x.clear();
-  x << 1 << 2 << 8 << 9;
-  y.clear();
-  y << 2 << 3 << 3 << 2;
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 1 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.788722, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), 0.894094, 0.00001 );
-  x.clear();
-  x << 1 << 2 << 8 << 9;
-  y.clear();
-  y << 2 << 3 << 3 << 2;
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 2 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.011936, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.845957, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.917393, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), 1.300845, 0.00001 );
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 4 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.024713, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.779058, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.990524, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), 1.761739, 0.00001 );
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 5 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.040317, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.718915, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.998204, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ),  1.896217, 0.00001 );
-  set = pal::PointSet( 4, x.data(), y.data() );
-  set.extendLineByDistance( 1, 3, 15 );
-  QCOMPARE( set.getNumPoints(), 6 );
-  QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 0 ), 1.292893, 0.00001 );
-  QCOMPARE( set.x.at( 1 ), 1.0 );
-  QCOMPARE( set.y.at( 1 ), 2.0 );
-  QCOMPARE( set.x.at( 2 ), 2.0 );
-  QCOMPARE( set.y.at( 2 ), 3.0 );
-  QCOMPARE( set.x.at( 3 ), 8.0 );
-  QCOMPARE( set.y.at( 3 ), 3.0 );
-  QCOMPARE( set.x.at( 4 ), 9.0 );
-  QCOMPARE( set.y.at( 4 ), 2.0 );
-  QGSCOMPARENEAR( set.x.at( 5 ), 11.982541, 0.00001 );
-  QGSCOMPARENEAR( set.y.at( 5 ), 1.676812, 0.00001 );
+  {
+    // with averaging
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 0.5 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.573264, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), 0.457821, 0.00001 );
+  }
+
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 1 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.29289, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.788722, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), 0.894094, 0.00001 );
+  }
+
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 2 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.011936, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.845957, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.917393, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), 1.300845, 0.00001 );
+  }
+
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 4 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.024713, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.779058, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.990524, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), 1.761739, 0.00001 );
+  }
+
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 5 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.040317, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.718915, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.998204, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ),  1.896217, 0.00001 );
+  }
+
+  {
+    QVector< double > x;
+    x << 1 << 2 << 8 << 9;
+    QVector< double > y;
+    y << 2 << 3 << 3 << 2;
+    pal::PointSet set( 4, x.data(), y.data() );
+    set.extendLineByDistance( 1, 3, 15 );
+    QCOMPARE( set.getNumPoints(), 6 );
+    QGSCOMPARENEAR( set.x.at( 0 ), 0.292893, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 0 ), 1.292893, 0.00001 );
+    QCOMPARE( set.x.at( 1 ), 1.0 );
+    QCOMPARE( set.y.at( 1 ), 2.0 );
+    QCOMPARE( set.x.at( 2 ), 2.0 );
+    QCOMPARE( set.y.at( 2 ), 3.0 );
+    QCOMPARE( set.x.at( 3 ), 8.0 );
+    QCOMPARE( set.y.at( 3 ), 3.0 );
+    QCOMPARE( set.x.at( 4 ), 9.0 );
+    QCOMPARE( set.y.at( 4 ), 2.0 );
+    QGSCOMPARENEAR( set.x.at( 5 ), 11.982541, 0.00001 );
+    QGSCOMPARENEAR( set.y.at( 5 ), 1.676812, 0.00001 );
+  }
 }
 
 void TestQgsLabelingEngine::curvedOverrun()
@@ -2629,6 +2674,90 @@ void TestQgsLabelingEngine::testMapUnitWordSpacing()
 
   QImage img = job.renderedImage();
   QVERIFY( imageCheck( QStringLiteral( "label_word_spacing_map_units" ), img, 20 ) );
+}
+
+void TestQgsLabelingEngine::testReferencedFields()
+{
+  QgsPalLayerSettings settings;
+  settings.fieldName = QStringLiteral( "hello+world" );
+  settings.isExpression = false;
+
+  QCOMPARE( settings.referencedFields( QgsRenderContext() ), QSet<QString>() << QStringLiteral( "hello+world" ) );
+
+  settings.isExpression = true;
+
+  QCOMPARE( settings.referencedFields( QgsRenderContext() ), QSet<QString>() << QStringLiteral( "hello" ) << QStringLiteral( "world" ) );
+
+  settings.dataDefinedProperties().setProperty( QgsPalLayerSettings::Size, QgsProperty::fromField( QStringLiteral( "my_dd_size" ) ) );
+
+  QCOMPARE( settings.referencedFields( QgsRenderContext() ), QSet<QString>() << QStringLiteral( "hello" ) << QStringLiteral( "world" ) << QStringLiteral( "my_dd_size" ) );
+}
+
+void TestQgsLabelingEngine::testClipping()
+{
+  QgsPalLayerSettings settings;
+  setDefaultLabelParams( settings );
+
+  QgsTextFormat format = settings.format();
+  format.setSize( 12 );
+  format.setSizeUnit( QgsUnitTypes::RenderPoints );
+  format.setColor( QColor( 0, 0, 0 ) );
+  settings.setFormat( format );
+
+  settings.fieldName = QStringLiteral( "Name" );
+  settings.placement = QgsPalLayerSettings::Line;
+
+  const QString filename = QStringLiteral( TEST_DATA_DIR ) + "/lines.shp";
+  std::unique_ptr< QgsVectorLayer> vl2( new QgsVectorLayer( filename, QStringLiteral( "lines" ), QStringLiteral( "ogr" ) ) );
+
+  QgsStringMap props;
+  props.insert( QStringLiteral( "outline_color" ), QStringLiteral( "#487bb6" ) );
+  props.insert( QStringLiteral( "outline_width" ), QStringLiteral( "1" ) );
+  std::unique_ptr< QgsLineSymbol > symbol( QgsLineSymbol::createSimple( props ) );
+  vl2->setRenderer( new QgsSingleSymbolRenderer( symbol.release() ) );
+
+  vl2->setLabeling( new QgsVectorLayerSimpleLabeling( settings ) );  // TODO: this should not be necessary!
+  vl2->setLabelsEnabled( true );
+
+  // make a fake render context
+  QSize size( 640, 480 );
+  QgsMapSettings mapSettings;
+  mapSettings.setLabelingEngineSettings( createLabelEngineSettings() );
+  mapSettings.setDestinationCrs( vl2->crs() );
+
+  mapSettings.setOutputSize( size );
+  mapSettings.setExtent( QgsRectangle( -117.543, 49.438, -82.323, 21.839 ) );
+  mapSettings.setLayers( QList<QgsMapLayer *>() << vl2.get() );
+  mapSettings.setOutputDpi( 96 );
+
+  QgsMapClippingRegion region1( QgsGeometry::fromWkt( "Polygon ((-92 45, -99 36, -94 29, -82 29, -81 45, -92 45))" ) );
+  region1.setFeatureClip( QgsMapClippingRegion::FeatureClippingType::ClipToIntersection );
+  mapSettings.addClippingRegion( region1 );
+
+  QgsMapClippingRegion region2( QgsGeometry::fromWkt( "Polygon ((-85 36, -85 46, -107 47, -108 28, -85 28, -85 36))" ) );
+  region2.setFeatureClip( QgsMapClippingRegion::FeatureClippingType::ClipPainterOnly );
+  mapSettings.addClippingRegion( region2 );
+
+  QgsLabelingEngineSettings engineSettings = mapSettings.labelingEngineSettings();
+  engineSettings.setFlag( QgsLabelingEngineSettings::UsePartialCandidates, false );
+  //engineSettings.setFlag( QgsLabelingEngineSettings::DrawCandidates, true );
+  mapSettings.setLabelingEngineSettings( engineSettings );
+
+  QgsMapRendererSequentialJob job( mapSettings );
+  job.start();
+  job.waitForFinished();
+
+  QImage img = job.renderedImage();
+  QVERIFY( imageCheck( QStringLiteral( "label_feature_clipping" ), img, 20 ) );
+
+  // also check with symbol levels
+  vl2->renderer()->setUsingSymbolLevels( true );
+  QgsMapRendererSequentialJob job2( mapSettings );
+  job2.start();
+  job2.waitForFinished();
+
+  img = job2.renderedImage();
+  QVERIFY( imageCheck( QStringLiteral( "label_feature_clipping" ), img, 20 ) );
 }
 
 QGSTEST_MAIN( TestQgsLabelingEngine )

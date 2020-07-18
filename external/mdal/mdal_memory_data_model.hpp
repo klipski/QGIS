@@ -23,12 +23,19 @@ namespace MDAL
   {
     double x;
     double y;
-    double z; // Bed elevation
+    double z = 0.0; // Bed elevation
 
   } Vertex;
 
+  typedef struct
+  {
+    size_t startVertex;
+    size_t endVertex;
+  } Edge;
+
   typedef std::vector<size_t> Face;
   typedef std::vector<Vertex> Vertices;
+  typedef std::vector<Edge> Edges;
   typedef std::vector<Face> Faces;
 
   /**
@@ -164,19 +171,40 @@ namespace MDAL
   class MemoryMesh: public Mesh
   {
     public:
+      //! Constructs an empty mesh
       MemoryMesh( const std::string &driverName,
-                  size_t verticesCount,
-                  size_t facesCount,
                   size_t faceVerticesMaximumCount,
-                  BBox extent,
                   const std::string &uri );
+
       ~MemoryMesh() override;
 
       std::unique_ptr<MDAL::MeshVertexIterator> readVertices() override;
+      std::unique_ptr<MDAL::MeshEdgeIterator> readEdges() override;
       std::unique_ptr<MDAL::MeshFaceIterator> readFaces() override;
 
-      Vertices vertices;
-      Faces faces;
+      const Vertices &vertices() const {return mVertices;}
+      const Faces &faces() const {return mFaces;}
+      const Edges &edges() const {return mEdges;}
+
+      //! Sets all vertices using std::move if possible
+      void setVertices( Vertices vertices );
+
+      //! Sets all faces using std::move if possible
+      void setFaces( Faces faces );
+
+      //! Sets all edges using std::move if possible
+      void setEdges( Edges edges );
+
+      size_t verticesCount() const override {return mVertices.size();}
+      size_t edgesCount() const override {return mEdges.size();}
+      size_t facesCount() const override {return mFaces.size();}
+      BBox extent() const override;
+
+    private:
+      BBox mExtent;
+      Vertices mVertices;
+      Faces mFaces;
+      Edges mEdges;
   };
 
   class MemoryMeshVertexIterator: public MeshVertexIterator
@@ -189,7 +217,20 @@ namespace MDAL
 
       const MemoryMesh *mMemoryMesh;
       size_t mLastVertexIndex = 0;
+  };
 
+  class MemoryMeshEdgeIterator: public MeshEdgeIterator
+  {
+    public:
+      MemoryMeshEdgeIterator( const MemoryMesh *mesh );
+      ~MemoryMeshEdgeIterator() override;
+
+      size_t next( size_t edgeCount,
+                   int *startVertexIndices,
+                   int *endVertexIndices ) override;
+
+      const MemoryMesh *mMemoryMesh;
+      size_t mLastEdgeIndex = 0;
   };
 
   class MemoryMeshFaceIterator: public MeshFaceIterator
@@ -205,7 +246,6 @@ namespace MDAL
 
       const MemoryMesh *mMemoryMesh;
       size_t mLastFaceIndex = 0;
-
   };
 } // namespace MDAL
 #endif //MDAL_MEMORY_DATA_MODEL_HPP

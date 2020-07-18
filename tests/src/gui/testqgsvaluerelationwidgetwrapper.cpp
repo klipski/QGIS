@@ -170,7 +170,7 @@ void TestQgsValueRelationWidgetWrapper::testDrillDown()
   cfg_municipality.insert( QStringLiteral( "NofColumns" ), 1 );
   cfg_municipality.insert( QStringLiteral( "AllowNull" ), false );
   cfg_municipality.insert( QStringLiteral( "OrderByValue" ), true );
-  cfg_municipality.insert( QStringLiteral( "FilterExpression" ), QStringLiteral( "\"province\" =  current_value('fk_province')" ) );
+  cfg_municipality.insert( QStringLiteral( "FilterExpression" ), QStringLiteral( "\"province\" = current_value('fk_province')" ) );
   cfg_municipality.insert( QStringLiteral( "UseCompleter" ), false );
   w_municipality.setConfig( cfg_municipality );
   w_municipality.widget();
@@ -178,6 +178,11 @@ void TestQgsValueRelationWidgetWrapper::testDrillDown()
 
   QCOMPARE( w_municipality.mCache.size(), 2 );
   QCOMPARE( w_municipality.mComboBox->count(), 2 );
+
+  // Set a feature
+  w_municipality.setFeature( vl2.getFeature( 1 ) );
+  QCOMPARE( w_municipality.mCache.size(), 1 );
+  QCOMPARE( w_municipality.mComboBox->count(), 1 );
 
   // check that valueChanged signal is correctly triggered
   QSignalSpy spy( &w_municipality, &QgsEditorWidgetWrapper::valuesChanged );
@@ -237,7 +242,7 @@ void TestQgsValueRelationWidgetWrapper::testDrillDownMulti()
 {
   // create a vector layer
   QgsVectorLayer vl1( QStringLiteral( "Polygon?crs=epsg:4326&field=pk:int&field=province:int&field=municipality:string" ), QStringLiteral( "vl1" ), QStringLiteral( "memory" ) );
-  QgsVectorLayer vl2( QStringLiteral( "Point?crs=epsg:4326&field=pk:int&field=fk_province:int&field=fk_municipality:int" ), QStringLiteral( "vl2" ), QStringLiteral( "memory" ) );
+  QgsVectorLayer vl2( QStringLiteral( "Point?crs=epsg:4326&field=pk:int&field=fk_province:int&field=fk_municipality:string" ), QStringLiteral( "vl2" ), QStringLiteral( "memory" ) );
   QgsProject::instance()->addMapLayer( &vl1, false, false );
   QgsProject::instance()->addMapLayer( &vl2, false, false );
 

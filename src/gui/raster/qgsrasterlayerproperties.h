@@ -28,6 +28,7 @@
 #include "qgsmaplayerstylemanager.h"
 #include "qgsmaptoolemitpoint.h"
 #include "qgis_gui.h"
+#include "qgsresamplingutils.h"
 
 class QgsPointXY;
 class QgsMapLayer;
@@ -37,6 +38,7 @@ class QgsMetadataWidget;
 class QgsRasterRenderer;
 class QgsRasterRendererWidget;
 class QgsRasterHistogramWidget;
+class QgsRasterLayerTemporalPropertiesWidget;
 class QgsWebView;
 
 
@@ -103,6 +105,18 @@ class GUI_EXPORT QgsRasterLayerProperties : public QgsOptionsDialogBase, private
     //! \brief slot executed when user presses "Remove Selected Row" button on the transparency page
     void pbnRemoveSelectedRow_clicked();
 
+    //! \brief slot executed when user "Set end same as start" button on time options in source page.
+    void setEndAsStartStaticButton_clicked();
+
+    //! \brief slot executed when user "Pass provider temporal range" radio button on time options in source page.
+    void passProjectTemporalRange_toggled( bool checked );
+
+    //! \brief slot executed when user "Static time range" radio button on time options in source page.
+    void staticTemporalRange_toggled( bool checked );
+
+    //! \brief slot executed when temporal properties status change.
+    void temporalPropertiesChange();
+
     /**
      * \brief slot executed when the single band radio button is pressed.
      * \brief slot executed when the reset null value to file default icon is selected
@@ -111,7 +125,17 @@ class GUI_EXPORT QgsRasterLayerProperties : public QgsOptionsDialogBase, private
 
     void pixelSelected( const QgsPointXY &, const Qt::MouseButton & );
 
+    /**
+     * updates gamma spinbox on slider changes
+     * \since QGIS 3.16
+     */
+    void updateGammaSpinBox( int value );
 
+    /**
+     * updates gamma slider on spinbox changes
+     * \since QGIS 3.16
+     */
+    void updateGammaSlider( double value );
 
     void mRenderTypeComboBox_currentIndexChanged( int index );
     //! Load the default style when appropriate button is pressed.
@@ -200,12 +224,31 @@ class GUI_EXPORT QgsRasterLayerProperties : public QgsOptionsDialogBase, private
     QgsRasterRendererWidget *mRendererWidget = nullptr;
     QgsMetadataWidget *mMetadataWidget = nullptr;
 
+    /**
+     * Widget with temporal inputs, to be used by temporal based raster layers.
+     */
+    QgsRasterLayerTemporalPropertiesWidget *mTemporalWidget = nullptr;
+
     bool rasterIsMultiBandColor();
 
     /**
      * Updates the information tab by reloading metadata
      */
     void updateInformationContent();
+
+    /**
+     * Updates the layers date source URI with the new time.
+     *
+     * \since QGIS 3.14
+     */
+    void updateSourceStaticTime();
+
+    /**
+     * Initializes the layers static time inputs state.
+     *
+     * \since QGIS 3.14
+     */
+    void setSourceStaticTimeState();
 
     void setupTransparencyTable( int nBands );
 
@@ -248,6 +291,8 @@ class GUI_EXPORT QgsRasterLayerProperties : public QgsOptionsDialogBase, private
 
     //! Synchronize state with associated raster layer
     void sync();
+
+    QgsResamplingUtils mResamplingUtils;
 
     friend class QgsAppScreenShots;
 };

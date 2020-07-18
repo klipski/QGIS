@@ -33,13 +33,14 @@
 
 #include "qgscolorrampshader.h"
 #include "qgsdataprovider.h"
-#include "qgsfields.h"
 #include "qgsraster.h"
+#include "qgsfields.h"
 #include "qgsrasterinterface.h"
 #include "qgsrasterpyramid.h"
 #include "qgsrasterrange.h"
 #include "qgsrectangle.h"
 #include "qgsrasteriterator.h"
+#include "qgsrasterdataprovidertemporalcapabilities.h"
 
 class QImage;
 class QByteArray;
@@ -99,7 +100,8 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
       NoProviderCapabilities = 0,       //!< Provider has no capabilities
       ReadLayerMetadata = 1 << 1, //!< Provider can read layer metadata from data store. Since QGIS 3.0. See QgsDataProvider::layerMetadata()
       WriteLayerMetadata = 1 << 2, //!< Provider can write layer metadata to the data store. Since QGIS 3.0. See QgsDataProvider::writeLayerMetadata()
-      ProviderHintBenefitsFromResampling = 1 << 3 //!< Provider benefits from resampling and should apply user default resampling settings (since QGIS 3.10)
+      ProviderHintBenefitsFromResampling = 1 << 3, //!< Provider benefits from resampling and should apply user default resampling settings (since QGIS 3.10)
+      ProviderHintCanPerformProviderResampling = 1 << 4 //!< Provider can perform resampling (to be opposed to post rendering resampling) (since QGIS 3.16)
     };
 
     //! Provider capabilities
@@ -132,6 +134,13 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
 
     //! Returns data type for the band specified by number
     Qgis::DataType dataType( int bandNo ) const override = 0;
+
+    /**
+     * Returns the fields of the raster layer for data providers that expose them,
+     * the default implementation returns an empty list.
+     * \since QGIS 3.14
+     */
+    virtual QgsFields fields() const { return QgsFields(); };
 
     /**
      * Returns source data type for the band specified by number,
@@ -260,6 +269,9 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
       return QStringList();
     }
 
+    QgsRasterDataProviderTemporalCapabilities *temporalCapabilities() override;
+    const QgsRasterDataProviderTemporalCapabilities *temporalCapabilities() const override SIP_SKIP;
+
     //! \brief Returns whether the provider supplies a legend graphic
     virtual bool supportsLegendGraphic() const { return false; }
 
@@ -354,9 +366,8 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      * \return QgsRaster::IdentifyFormatValue: map of values for each band, keys are band numbers
      *         (from 1).
      *         QgsRaster::IdentifyFormatFeature: map of QgsRasterFeatureList for each sublayer
-     *         (WMS) - TODO: it is not consistent with QgsRaster::IdentifyFormatValue.
      *         QgsRaster::IdentifyFormatHtml: map of HTML strings for each sublayer (WMS).
-     *         Empty if failed or there are no results (TODO: better error reporting).
+     *         Empty if failed or there are no results.
      * \note The arbitraryness of the returned document is enforced by WMS standards
      *       up to at least v1.3.0
      * \see sample(), which is much more efficient for simple "value at point" queries.
@@ -546,6 +557,110 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      */
     virtual bool ignoreExtents() const;
 
+    /**
+     * Types of transformation in transformCoordinates() function.
+     * \since QGIS 3.14
+     */
+    enum TransformType
+    {
+      TransformImageToLayer,  //!< Transforms image coordinates to layer (georeferenced) coordinates
+      TransformLayerToImage,  //!< Transforms layer (georeferenced) coordinates to image coordinates
+    };
+
+    /**
+     * Transforms coordinates between source image coordinate space [0..width]x[0..height] and
+     * layer coordinate space (georeferenced coordinates). Often this transformation is a simple
+     * 2D affine transformation (offset and scaling), but rasters with different georeferencing
+     * methods like GCPs (ground control points) or RPCs (rational polynomial coefficients) may
+     * require a more complex transform.
+     *
+     * If the transform fails (input coordinates are outside of the valid range or data provider
+     * does not support this functionality), an empty point is returned.
+     *
+     * \since QGIS 3.14
+     */
+    virtual QgsPoint transformCoordinates( const QgsPoint &point, TransformType type );
+
+
+    /**
+     * Enable or disable provider-level resampling.
+     *
+     * \return true if success
+     * \since QGIS 3.16
+     */
+    virtual bool enableProviderResampling( bool enable ) { Q_UNUSED( enable ); return false; }
+
+    /**
+     * Returns whether provider-level resampling is enabled.
+     *
+     * \note Resampling is effective only if zoomedInResamplingMethod() and/or
+     * zoomedOutResamplingMethod() return non-nearest resampling.
+     *
+     * \see zoomedInResamplingMethod()
+     * \see zoomedOutResamplingMethod()
+     * \see maxOversampling()
+     *
+     * \since QGIS 3.16
+     */
+    bool isProviderResamplingEnabled() const { return mProviderResamplingEnabled; }
+
+    /**
+     * Resampling method for provider-level resampling.
+     * \since QGIS 3.16
+     */
+    enum class ResamplingMethod
+    {
+      Nearest,      //!< Nearest-neighbour resamplikng
+      Bilinear,     //!< Bilinear resamplikng
+      Cubic,     //!< Bicubic resamplikng
+    };
+
+    /**
+     * Set resampling method to apply for zoomed-in operations.
+     *
+     * \return true if success
+     * \since QGIS 3.16
+     */
+    virtual bool setZoomedInResamplingMethod( ResamplingMethod method ) { Q_UNUSED( method ); return false; }
+
+    /**
+     * Returns resampling method for zoomed-in operations.
+     * \since QGIS 3.16
+     */
+    ResamplingMethod zoomedInResamplingMethod() const { return mZoomedInResamplingMethod; }
+
+    /**
+     * Set resampling method to apply for zoomed-out operations.
+     *
+     * \return true if success
+     * \since QGIS 3.16
+     */
+    virtual bool setZoomedOutResamplingMethod( ResamplingMethod method ) { Q_UNUSED( method ); return false; }
+
+    /**
+     * Returns resampling method for zoomed-out operations.
+     * \since QGIS 3.16
+     */
+    ResamplingMethod zoomedOutResamplingMethod() const { return mZoomedOutResamplingMethod; }
+
+    /**
+     * Sets maximum oversampling factor for zoomed-out operations.
+     *
+     * \return true if success
+     * \since QGIS 3.16
+     */
+    virtual bool setMaxOversampling( double factor ) { Q_UNUSED( factor ); return false; }
+
+    /**
+     * Returns maximum oversampling factor for zoomed-out operations.
+     * \since QGIS 3.16
+     */
+    double maxOversampling() const { return mMaxOversampling; }
+
+    void readXml( const QDomElement &filterElem ) override;
+
+    void writeXml( QDomDocument &doc, QDomElement &parentElem ) const override;
+
   signals:
 
     /**
@@ -610,6 +725,25 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     QList< QgsRasterRangeList > mUserNoDataValue;
 
     mutable QgsRectangle mExtent;
+
+    //! Whether provider resampling is enabled.
+    bool mProviderResamplingEnabled = false;
+
+    //! Resampling method for zoomed in pixel extraction
+    ResamplingMethod mZoomedInResamplingMethod = ResamplingMethod::Nearest;
+
+    //! Resampling method for zoomed out pixel extraction
+    ResamplingMethod mZoomedOutResamplingMethod = ResamplingMethod::Nearest;
+
+    //! Maximum boundary for oversampling (to avoid too much data traffic). Default: 2.0
+    double mMaxOversampling = 2.0;
+
+  private:
+
+    /**
+     * Data provider temporal properties
+     */
+    std::unique_ptr< QgsRasterDataProviderTemporalCapabilities > mTemporalCapabilities;
 
 };
 

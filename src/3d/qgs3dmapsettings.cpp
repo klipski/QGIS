@@ -31,9 +31,11 @@
 
 Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   : QObject( nullptr )
+  , QgsTemporalRangeObject( other )
   , mOrigin( other.mOrigin )
   , mCrs( other.mCrs )
   , mBackgroundColor( other.mBackgroundColor )
+  , mSelectionColor( other.mSelectionColor )
   , mTerrainVerticalScale( other.mTerrainVerticalScale )
   , mTerrainGenerator( other.mTerrainGenerator ? other.mTerrainGenerator->clone() : nullptr )
   , mMapTileResolution( other.mMapTileResolution )
@@ -45,10 +47,13 @@ Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   , mShowTerrainBoundingBoxes( other.mShowTerrainBoundingBoxes )
   , mShowTerrainTileInfo( other.mShowTerrainTileInfo )
   , mShowCameraViewCenter( other.mShowCameraViewCenter )
+  , mShowLightSources( other.mShowLightSources )
   , mShowLabels( other.mShowLabels )
   , mPointLights( other.mPointLights )
+  , mDirectionalLights( other.mDirectionalLights )
   , mFieldOfView( other.mFieldOfView )
   , mLayers( other.mLayers )
+  , mRenderers() // initialized in body
   , mSkyboxEnabled( other.mSkyboxEnabled )
   , mSkyboxFileBase( other.mSkyboxFileBase )
   , mSkyboxFileExtension( other.mSkyboxFileExtension )
@@ -124,6 +129,20 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
     mPointLights << defaultLight;
   }
 
+  mDirectionalLights.clear();
+  QDomElement elemDirectionalLights = elem.firstChildElement( QStringLiteral( "directional-lights" ) );
+  if ( !elemDirectionalLights.isNull() )
+  {
+    QDomElement elemDirectionalLight = elemDirectionalLights.firstChildElement( QStringLiteral( "directional-light" ) );
+    while ( !elemDirectionalLight.isNull() )
+    {
+      QgsDirectionalLightSettings directionalLight;
+      directionalLight.readXml( elemDirectionalLight );
+      mDirectionalLights << directionalLight;
+      elemDirectionalLight = elemDirectionalLight.nextSiblingElement( QStringLiteral( "directional-light" ) );
+    }
+  }
+
   QDomElement elemMapLayers = elemTerrain.firstChildElement( QStringLiteral( "layers" ) );
   QDomElement elemMapLayer = elemMapLayers.firstChildElement( QStringLiteral( "layer" ) );
   QList<QgsMapLayerRef> mapLayers;
@@ -197,6 +216,12 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
   mShowTerrainBoundingBoxes = elemDebug.attribute( QStringLiteral( "bounding-boxes" ), QStringLiteral( "0" ) ).toInt();
   mShowTerrainTileInfo = elemDebug.attribute( QStringLiteral( "terrain-tile-info" ), QStringLiteral( "0" ) ).toInt();
   mShowCameraViewCenter = elemDebug.attribute( QStringLiteral( "camera-view-center" ), QStringLiteral( "0" ) ).toInt();
+  mShowLightSources = elemDebug.attribute( QStringLiteral( "show-light-sources" ), QStringLiteral( "0" ) ).toInt();
+
+  QDomElement elemTemporalRange = elem.firstChildElement( QStringLiteral( "temporal-range" ) );
+  QDateTime start = QDateTime::fromString( elemTemporalRange.attribute( QStringLiteral( "start" ) ), Qt::ISODate );
+  QDateTime end = QDateTime::fromString( elemTemporalRange.attribute( QStringLiteral( "end" ) ), Qt::ISODate );
+  setTemporalRange( QgsDateTimeRange( start, end ) );
 }
 
 QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteContext &context ) const
@@ -242,6 +267,14 @@ QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteCon
   }
   elem.appendChild( elemPointLights );
 
+  QDomElement elemDirectionalLights = doc.createElement( QStringLiteral( "directional-lights" ) );
+  for ( const QgsDirectionalLightSettings &directionalLight : qgis::as_const( mDirectionalLights ) )
+  {
+    QDomElement elemDirectionalLight = directionalLight.writeXml( doc );
+    elemDirectionalLights.appendChild( elemDirectionalLight );
+  }
+  elem.appendChild( elemDirectionalLights );
+
   QDomElement elemMapLayers = doc.createElement( QStringLiteral( "layers" ) );
   Q_FOREACH ( const QgsMapLayerRef &layerRef, mLayers )
   {
@@ -277,7 +310,12 @@ QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteCon
   elemDebug.setAttribute( QStringLiteral( "bounding-boxes" ), mShowTerrainBoundingBoxes ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "terrain-tile-info" ), mShowTerrainTileInfo ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "camera-view-center" ), mShowCameraViewCenter ? 1 : 0 );
+  elemDebug.setAttribute( QStringLiteral( "show-light-sources" ), mShowLightSources ? 1 : 0 );
   elem.appendChild( elemDebug );
+
+  QDomElement elemTemporalRange = doc.createElement( QStringLiteral( "temporal-range" ) );
+  elemTemporalRange.setAttribute( QStringLiteral( "start" ), temporalRange().begin().toString( Qt::ISODate ) );
+  elemTemporalRange.setAttribute( QStringLiteral( "end" ), temporalRange().end().toString( Qt::ISODate ) );
 
   return elem;
 }
@@ -505,6 +543,15 @@ void Qgs3DMapSettings::setShowCameraViewCenter( bool enabled )
   emit showCameraViewCenterChanged();
 }
 
+void Qgs3DMapSettings::setShowLightSourceOrigins( bool enabled )
+{
+  if ( mShowLightSources == enabled )
+    return;
+
+  mShowLightSources = enabled;
+  emit showLightSourceOriginsChanged();
+}
+
 void Qgs3DMapSettings::setShowLabels( bool enabled )
 {
   if ( mShowLabels == enabled )
@@ -523,6 +570,15 @@ void Qgs3DMapSettings::setPointLights( const QList<QgsPointLightSettings> &point
   emit pointLightsChanged();
 }
 
+void Qgs3DMapSettings::setDirectionalLights( const QList<QgsDirectionalLightSettings> &directionalLights )
+{
+  if ( mDirectionalLights == directionalLights )
+    return;
+
+  mDirectionalLights = directionalLights;
+  emit directionalLightsChanged();
+}
+
 void Qgs3DMapSettings::setFieldOfView( const float fieldOfView )
 {
   if ( mFieldOfView == fieldOfView )
@@ -532,3 +588,9 @@ void Qgs3DMapSettings::setFieldOfView( const float fieldOfView )
   emit fieldOfViewChanged();
 }
 
+void Qgs3DMapSettings::setSkybox( bool enabled, const QString &fileBase, const QString &fileExtension )
+{
+  mSkyboxEnabled = enabled;
+  mSkyboxFileBase = fileBase;
+  mSkyboxFileExtension = fileExtension;
+}

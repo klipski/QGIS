@@ -44,7 +44,8 @@
 
 void QgsHandleBadLayersHandler::handleBadLayers( const QList<QDomNode> &layers )
 {
-  QApplication::setOverrideCursor( Qt::ArrowCursor );
+  QgsTemporaryCursorRestoreOverride cursorOverride;
+
   QgsHandleBadLayers *dialog = new QgsHandleBadLayers( layers );
 
   dialog->buttonBox->button( QDialogButtonBox::Ignore )->setToolTip( tr( "Import all unavailable layers unmodified (you can fix them later)." ) );
@@ -70,7 +71,6 @@ void QgsHandleBadLayersHandler::handleBadLayers( const QList<QDomNode> &layers )
   }
 
   delete dialog;
-  QApplication::restoreOverrideCursor();
 }
 
 QgsHandleBadLayers::QgsHandleBadLayers( const QList<QDomNode> &layers )
@@ -112,6 +112,9 @@ QgsHandleBadLayers::QgsHandleBadLayers( const QList<QDomNode> &layers )
                                          << tr( "Auth config" )
                                          << tr( "Datasource" )
                                        );
+
+  mLayerList->horizontalHeader()->setSectionsMovable( true );
+  mLayerList->horizontalHeader()->setSectionResizeMode( QHeaderView::Interactive );
 
   int j = 0;
   for ( int i = 0; i < mLayers.size(); i++ )
@@ -586,7 +589,7 @@ void QgsHandleBadLayers::autoFind()
 
     // Try first to change the datasource of the existing layers, this will
     // maintain the current status (checked/unchecked) and group
-    if ( QgsProject::instance()->mapLayer( layerId ) )
+    if ( !datasource.isEmpty() && QgsProject::instance()->mapLayer( layerId ) )
     {
       QgsDataProvider::ProviderOptions options;
       QgsMapLayer *mapLayer = QgsProject::instance()->mapLayer( layerId );

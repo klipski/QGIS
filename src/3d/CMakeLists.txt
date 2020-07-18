@@ -2,6 +2,7 @@
 # sources
 
 SET(QGIS_3D_SRCS
+  qgs3d.cpp
   qgsaabb.cpp
   qgsabstract3dengine.cpp
   qgsabstractvectorlayer3drenderer.cpp
@@ -16,6 +17,7 @@ SET(QGIS_3D_SRCS
   qgsoffscreen3dengine.cpp
   qgsphongmaterialsettings.cpp
   qgspointlightsettings.cpp
+  qgsdirectionallightsettings.cpp
   qgsraycastingutils_p.cpp
   qgsrulebased3drenderer.cpp
   qgsrulebasedchunkloader_p.cpp
@@ -72,6 +74,7 @@ SET(QGIS_3D_SRCS
 
 SET(QGIS_3D_HDRS
   processing/qgs3dalgorithms.h
+  qgs3d.h
   qgs3danimationsettings.h
   qgs3dmapscene.h
   qgs3dmapsettings.h
@@ -87,6 +90,7 @@ SET(QGIS_3D_HDRS
   qgsoffscreen3dengine.h
   qgsphongmaterialsettings.h
   qgspointlightsettings.h
+  qgsdirectionallightsettings.h
   qgsrulebased3drenderer.h
   qgstessellatedpolygongeometry.h
   qgstilingscheme.h
@@ -134,7 +138,7 @@ SET(QGIS_3D_PRIVATE_HDRS
   mesh/qgsmesh3dmaterial_p.h
 )
 
-QT5_ADD_RESOURCES(QGIS_3D_RCC_SRCS shaders.qrc)
+SET (QGIS_3D_RCCS  shaders.qrc  ../../resources/3d/textures/textures.qrc)
 
 # install headers
 
@@ -171,7 +175,8 @@ INCLUDE_DIRECTORIES(SYSTEM
 #############################################################
 # qgis_3d library
 
-ADD_LIBRARY(qgis_3d SHARED ${QGIS_3D_SRCS} ${QGIS_3D_HDRS} ${QGIS_3D_RCC_SRCS} ${QGIS_3D_PRIVATE_HDRS})
+
+ADD_LIBRARY(qgis_3d SHARED ${QGIS_3D_SRCS} ${QGIS_3D_HDRS} ${QGIS_3D_RCCS} ${QGIS_3D_PRIVATE_HDRS})
 
 TARGET_LINK_LIBRARIES(qgis_3d Qt5::3DCore Qt5::3DRender Qt5::3DInput Qt5::3DLogic Qt5::3DExtras)
 

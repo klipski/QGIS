@@ -59,7 +59,7 @@ enum QgsOraclePrimaryKeyType
   interface defined in the QgsDataProvider class to provide access to spatial
   data residing in a oracle enabled database.
   */
-class QgsOracleProvider : public QgsVectorDataProvider
+class QgsOracleProvider final: public QgsVectorDataProvider
 {
     Q_OBJECT
     Q_PROPERTY( QString workspace READ getWorkspace WRITE setWorkspace )
@@ -149,7 +149,7 @@ class QgsOracleProvider : public QgsVectorDataProvider
     QVariant defaultValue( int fieldId ) const override;
     QString defaultValueClause( int fieldId ) const override;
     bool skipConstraintCheck( int fieldIndex, QgsFieldConstraints::Constraint constraint, const QVariant &value = QVariant() ) const override;
-    bool addFeatures( QgsFeatureList &flist, QgsFeatureSink::Flags flags = nullptr ) override;
+    bool addFeatures( QgsFeatureList &flist, QgsFeatureSink::Flags flags = QgsFeatureSink::Flags() ) override;
     bool deleteFeatures( const QgsFeatureIds &id ) override;
     bool addAttributes( const QList<QgsField> &attributes ) override;
     bool deleteAttributes( const QgsAttributeIds &ids ) override;
@@ -313,6 +313,8 @@ class QgsOracleProvider : public QgsVectorDataProvider
 
       private:
         QString mWhat;
+
+        OracleException &operator= ( const OracleException & ) = delete;
     };
 
     // A function that determines if the given schema.table.column
@@ -385,7 +387,7 @@ class QgsOracleSharedData
     QMap<QgsFeatureId, QVariantList> mFidToKey;      // map feature back to fea
 };
 
-class QgsOracleProviderMetadata: public QgsProviderMetadata
+class QgsOracleProviderMetadata final: public QgsProviderMetadata
 {
   public:
     QgsOracleProviderMetadata();
@@ -408,7 +410,7 @@ class QgsOracleProviderMetadata: public QgsProviderMetadata
 };
 
 #ifdef HAVE_GUI
-class QgsOracleProviderGuiMetadata: public QgsProviderGuiMetadata
+class QgsOracleProviderGuiMetadata final: public QgsProviderGuiMetadata
 {
   public:
     QgsOracleProviderGuiMetadata();

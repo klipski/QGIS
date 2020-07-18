@@ -59,14 +59,27 @@ class QgsCoordinateTransformContextPrivate : public QSharedData
      * Mapping for coordinate operation Proj string to use for source/destination CRS pairs.
      */
 #if PROJ_VERSION_MAJOR>=6
-    QMap< QPair< QString, QString >, QString > mSourceDestDatumTransforms;
+    class OperationDetails
+    {
+      public:
+        QString operation;
+        bool allowFallback = true;
+
+        bool operator==( const OperationDetails &other ) const
+        {
+          return operation == other.operation && allowFallback == other.allowFallback;
+        }
+    };
+    QMap< QPair< QgsCoordinateReferenceSystem, QgsCoordinateReferenceSystem >, OperationDetails > mSourceDestDatumTransforms;
 #else
     QMap< QPair< QString, QString >, QgsDatumTransform::TransformPair > mSourceDestDatumTransforms;
 #endif
 
     //! Mutex for making QgsCoordinateTransformContextPrivate thread safe
-    mutable QReadWriteLock mLock;
+    mutable QReadWriteLock mLock{};
 
+  private:
+    QgsCoordinateTransformContextPrivate &operator= ( const QgsCoordinateTransformContextPrivate & ) = delete;
 };
 
 
